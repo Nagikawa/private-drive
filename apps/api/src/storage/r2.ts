@@ -1,0 +1,192 @@
+import {
+  CopyObjectCommand,
+  DeleteObjectCommand,
+  GetObjectCommand,
+  HeadBucketCommand,
+  ListObjectsV2Command,
+  PutObjectCommand,
+  S3Client,
+} from "@aws-sdk/client-s3"
+import { Context, Effect, Layer, Predicate, Redacted } from "effect"
+import { StorageError, contentTypeFromName, parentFolder, splitStorageKey } from "@private-drive/domain"
+import { AppConfig } from "../config.ts"
+import { unavailable, type RemoteFile, type RemoteListing } from "./shared.ts"
+
+export class R2 extends Context.Service<R2, {
+  readonly configured: boolean
+  copy(from: string, to: string): Effect.Effect<void, StorageError>
+  delete(key: string): Effect.Effect<void, StorageError>
+  get(key: string): Effect.Effect<Uint8Array, StorageError>
+  list(folder: string, recursive: boolean): Effect.Effect<RemoteListing, StorageError>
+  put(key: string, bytes: Uint8Array, contentType: string): Effect.Effect<void, StorageError>
+  status(): Effect.Effect<string, StorageError>
+}>()("private-drive/api/storage/R2") {
+  // Builds one S3 client when R2 credentials exist, and fails the methods when they do not.
+  static readonly layer = Layer.effect(
+    R2,
+    Effect.gen(function*() {
+      const config = yield* AppConfig
+      const client = config.r2 === undefined
+        ? undefined
+        : new S3Client({
+          credentials: {
+            accessKeyId: config.r2.accessKeyId,
+            secretAccessKey: Redacted.value(config.r2.secretAccessKey),
+          },
+          endpoint: `https://${config.r2.accountId}.r2.cloudflarestorage.com`,
+          forcePathStyle: true,
+          region: "auto",
+        })
+
+      // Sends one S3 command and maps SDK rejections onto the storage error the API returns.
+      const send = <A>(command: object) =>
+        Effect.gen(function*() {
+          if (client === undefined) {
+            return yield* new StorageError({ message: "R2 is not configured" })
+          }
+          return yield* Effect.tryPromise({
+            catch: (cause) =>
+              new StorageError({
+                message: Predicate.isObject(cause) && Predicate.hasProperty(cause, "message") &&
+                    Predicate.isString(cause.message)
+                  ? cause.message
+                  : "R2 request failed",
+              }),
+            try: () => client.send(command as never) as Promise<A>,
+          })
+        })
+
+      // Pages the bucket so a folder listing can include nested keys without loading the whole account at once.
+      const list = Effect.fn("R2.list")(function*(folder: string, recursive: boolean) {
+        if (config.r2 === undefined) {
+          return yield* unavailable("r2")
+        }
+        const prefix = folder === "" ? "" : `${folder}/`
+        const files: Array<RemoteFile> = []
+        const folderSet = new Set<string>()
+        // Records a key's folder and its parents so the tree still shows intermediate directories.
+        const remember = Effect.fnUntraced(function*(path: string) {
+          let current = path
+          while (current !== "") {
+            if (folderSet.has(current)) {
+              return
+            }
+            folderSet.add(current)
+            current = yield* parentFolder(current)
+          }
+        })
+        let token: string | undefined
+        let truncated = false
+        do {
+          const page = yield* send<{
+            readonly CommonPrefixes?: ReadonlyArray<{ readonly Prefix?: string }>
+            readonly Contents?: ReadonlyArray<{ readonly Key?: string; readonly Size?: number }>
+            readonly IsTruncated?: boolean
+            readonly NextContinuationToken?: string
+          }>(new ListObjectsV2Command({
+            Bucket: config.r2.bucket,
+            ContinuationToken: token,
+            Delimiter: recursive ? undefined : "/",
+            MaxKeys: 1000,
+            Prefix: prefix,
+          }))
+          for (const item of page.Contents ?? []) {
+            if (item.Key === undefined || item.Key.endsWith("/")) {
+              continue
+            }
+            const parts = yield* splitStorageKey(item.Key)
+            if (recursive) {
+              yield* remember(parts.folder)
+            }
+            files.push({
+              contentType: yield* contentTypeFromName(parts.name),
+              key: item.Key,
+              size: item.Size ?? 0,
+            })
+          }
+          for (const item of page.CommonPrefixes ?? []) {
+            if (item.Prefix !== undefined) {
+              yield* remember(item.Prefix.replace(/\/$/, ""))
+            }
+          }
+          token = page.IsTruncated ? page.NextContinuationToken : undefined
+          if (files.length >= 400 && token !== undefined) {
+            truncated = true
+            token = undefined
+          }
+        } while (token !== undefined)
+        return { files, folders: [...folderSet], truncated }
+      })
+
+      // Uploads bytes under a key so the bucket holds the file the index will point at.
+      const put = Effect.fn("R2.put")(function*(key: string, bytes: Uint8Array, contentType: string) {
+        if (config.r2 === undefined) {
+          return yield* unavailable("r2")
+        }
+        yield* send(new PutObjectCommand({
+          Body: bytes,
+          Bucket: config.r2.bucket,
+          ContentType: contentType,
+          Key: key,
+        }))
+      })
+
+      // Downloads an object body for preview and for moves that need the bytes.
+      const get = Effect.fn("R2.get")(function*(key: string) {
+        if (config.r2 === undefined) {
+          return yield* unavailable("r2")
+        }
+        const output = yield* send<{ readonly Body?: { transformToByteArray: () => Promise<Uint8Array> } }>(
+          new GetObjectCommand({ Bucket: config.r2.bucket, Key: key }),
+        )
+        if (output.Body === undefined) {
+          return yield* new StorageError({ message: "R2 returned no file content" })
+        }
+        return yield* Effect.tryPromise({
+          catch: () => new StorageError({ message: "R2 download failed" }),
+          try: () => output.Body!.transformToByteArray(),
+        })
+      })
+
+      // Removes an object after the index has decided the file or folder marker should go.
+      const remove = Effect.fn("R2.delete")(function*(key: string) {
+        if (config.r2 === undefined) {
+          return yield* unavailable("r2")
+        }
+        yield* send(new DeleteObjectCommand({ Bucket: config.r2.bucket, Key: key }))
+      })
+
+      // Copies within the bucket before deleting the old key, so a move does not re-upload the bytes.
+      const copy = Effect.fn("R2.copy")(function*(from: string, to: string) {
+        if (config.r2 === undefined) {
+          return yield* unavailable("r2")
+        }
+        const source = from.split("/").map((part) => encodeURIComponent(part)).join("/")
+        yield* send(new CopyObjectCommand({
+          Bucket: config.r2.bucket,
+          CopySource: `${config.r2.bucket}/${source}`,
+          Key: to,
+        }))
+      })
+
+      // Confirms the bucket is reachable so the source list can show a connected bucket name.
+      const status = Effect.fn("R2.status")(function*() {
+        if (config.r2 === undefined) {
+          return "Not configured"
+        }
+        yield* send(new HeadBucketCommand({ Bucket: config.r2.bucket }))
+        return `Connected ${config.r2.bucket}`
+      })
+
+      return R2.of({
+        configured: config.r2 !== undefined,
+        copy,
+        delete: remove,
+        get,
+        list,
+        put,
+        status,
+      })
+    }),
+  )
+}

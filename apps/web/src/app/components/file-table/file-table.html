@@ -1,0 +1,69 @@
+<div class="flex h-full min-h-0 min-w-0 flex-col">
+  <table class="table table-fixed w-full shrink-0 rounded-none!">
+    <colgroup>
+      <col class="w-20" />
+      <col />
+      <col class="w-32" />
+      <col class="w-28" />
+    </colgroup>
+    <thead>
+      <tr>
+        <th></th>
+        <th>Name</th>
+        <th>Size</th>
+        <th>Link</th>
+      </tr>
+    </thead>
+  </table>
+  <cdk-virtual-scroll-viewport
+    class="min-h-0 w-full flex-1"
+    [itemSize]="itemSize"
+    [minBufferPx]="itemSize"
+    [maxBufferPx]="itemSize * 3"
+  >
+    <table class="table table-fixed w-full rounded-none!">
+      <colgroup>
+        <col class="w-20" />
+        <col />
+        <col class="w-32" />
+        <col class="w-28" />
+      </colgroup>
+      <tbody>
+        <tr
+          *cdkVirtualFor="let file of files(); trackBy: trackFile"
+          draggable="true"
+          (mousedown)="press($event)"
+          (dragstart)="dragStart($event, file.id)"
+          (dragend)="dragEnd()"
+        >
+          <th>
+            <label>
+              <input
+                type="checkbox"
+                class="checkbox"
+                [checked]="selected().includes(file.id)"
+                [attr.aria-label]="'Select ' + file.name"
+                (change)="toggle(file.id, $event)"
+              />
+            </label>
+          </th>
+          <td class="max-w-0 overflow-hidden">
+            <button class="btn btn-ghost btn-xs max-w-full truncate" type="button" draggable="true" (click)="preview(file)">{{ file.name }}</button>
+          </td>
+          <td><span class="badge badge-ghost badge-sm">{{ formatBytes(file.size) }}</span></td>
+          <th>
+            <div class="dropdown dropdown-end">
+              <button class="btn btn-ghost btn-xs" type="button" [attr.aria-label]="'Copy link for ' + file.name">Link</button>
+              <ul tabindex="0" class="dropdown-content menu bg-base-100 rounded-box z-1 w-40 p-2 shadow-sm">
+                <li><button type="button" (click)="copy(file, 'url')">URL</button></li>
+                <li><button type="button" (click)="copy(file, 'markdown')">Markdown</button></li>
+                <li><button type="button" (click)="copy(file, 'html')">HTML</button></li>
+                <li><button type="button" (click)="copy(file, 'bbcode')">BBCode</button></li>
+              </ul>
+            </div>
+          </th>
+        </tr>
+      </tbody>
+    </table>
+  </cdk-virtual-scroll-viewport>
+</div>

@@ -1,0 +1,152 @@
+<section class="flex min-h-0 flex-1 flex-col" aria-labelledby="files-heading">
+  <div class="flex min-h-0 flex-1 flex-col gap-4 md:flex-row">
+    @if (showFolderTree()) {
+      <app-folder-tree
+        [nodes]="tree()"
+        [folder]="folder()"
+        [dropTarget]="dropTarget()"
+        (opened)="openFolder($event)"
+        (draggedOver)="onFolderDragOver($event.event, $event.path)"
+        (draggedLeave)="onFolderDragLeave($event.event, $event.path)"
+        (dropped)="onFolderDrop($event.event, $event.path)"
+      />
+    }
+    <div class="flex min-h-0 min-w-0 flex-1 flex-col">
+      <app-breadcrumbs class="shrink-0" [crumbs]="crumbs()" (opened)="openFolder($event)" />
+      <div class="flex shrink-0 flex-wrap items-center gap-2">
+        <fieldset class="fieldset max-w-md">
+          <input placeholder="Search files..." id="file-search" class="input w-full" [value]="search()" (input)="onSearch($event)" />
+        </fieldset>
+        @if (state().listing; as listing) {
+          @if (listing.files.length > 0) {
+            <label class="label w-fit">
+              <input #allBox type="checkbox" class="checkbox checkbox-sm" [checked]="allSelected()" (change)="toggleAll(checkedOf($event))" />
+              Select all
+            </label>
+          }
+        }
+        <div class="ml-auto flex flex-wrap items-center gap-2">
+        <app-folder-actions
+          [deleteDisabled]="!hasSelection()"
+          [uploadDisabled]="uploading()"
+          (chosen)="onFolderAction($event)"
+        />
+        <input #fileInput class="hidden" type="file" multiple aria-hidden="true" tabindex="-1" (change)="onUpload($event)" />
+        <div class="join" role="group" aria-label="View">
+          <button
+            class="join-item btn btn-sm btn-square transition-none!"
+            type="button"
+            aria-label="Grid"
+            [class.btn-primary]="view() === 'grid'"
+            (click)="setView('grid')"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="h-4 w-4" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
+            </svg>
+          </button>
+          <button
+            class="join-item btn btn-sm btn-square transition-none!"
+            type="button"
+            aria-label="List"
+            [class.btn-primary]="view() === 'list'"
+            (click)="setView('list')"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="h-4 w-4" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+            </svg>
+          </button>
+        </div>
+        </div>
+      </div>
+      <div class="flex min-h-0 flex-1 flex-col overflow-hidden">
+      @if (uploading()) {
+        <progress class="progress w-full" aria-label="Upload progress"></progress>
+      }
+      @if (uploadStatus()) {
+        <div class="alert" role="status">
+          <span>{{ uploadStatus() }}</span>
+        </div>
+      }
+      @if (state().error) {
+        <div class="alert alert-error" role="alert">
+          <span>{{ state().error }}</span>
+        </div>
+      } @else if (!state().listing) {
+        <progress class="progress w-full" aria-label="Loading files"></progress>
+      } @else {
+        @if (state().listing!.truncated) {
+          <div class="alert alert-warning">
+            <span>The list is truncated. Open a folder or search to narrow it.</span>
+          </div>
+        }
+        @if (state().listing!.files.length === 0) {
+          <div class="alert">
+            <span>This folder is empty.</span>
+          </div>
+        } @else if (view() === 'grid') {
+          <div class="min-h-0 flex-1 overflow-auto">
+          <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            @for (file of state().listing!.files; track file.id) {
+              <div
+                class="card bg-base-100 card-border"
+                draggable="true"
+                (mousedown)="rememberDragOrigin($event)"
+                (dragstart)="onFileDragStart($event, file.id)"
+                (dragend)="onFileDragEnd()"
+              >
+                @if (file.image) {
+                  <figure>
+                    <img class="h-40 w-full object-contain" draggable="false" [src]="contentUrl(file.id)" [alt]="file.name" />
+                  </figure>
+                }
+                <div class="card-body flex-row flex-nowrap items-center gap-2 p-2">
+                  <h2 class="card-title min-w-0 flex-1 truncate">
+                    <button class="btn btn-ghost btn-sm block w-full min-w-0 truncate text-start" type="button" draggable="true" (click)="preview(file)">{{ file.name }}</button>
+                  </h2>
+                  <div class="card-actions flex-nowrap shrink-0 items-center">
+                    <label class="label">
+                      <input
+                        type="checkbox"
+                        class="checkbox"
+                        [checked]="selected().includes(file.id)"
+                        [attr.aria-label]="'Select ' + file.name"
+                        (change)="toggle(file.id, checkedOf($event))"
+                      />
+                    </label>
+                    <div class="dropdown dropdown-end">
+                      <button class="btn btn-ghost btn-sm shrink-0" type="button" [attr.aria-label]="'Copy link for ' + file.name">Link</button>
+                      <ul tabindex="0" class="dropdown-content menu bg-base-100 rounded-box z-1 w-40 p-2 shadow-sm">
+                        <li><button type="button" (click)="copy(file, 'url')">URL</button></li>
+                        <li><button type="button" (click)="copy(file, 'markdown')">Markdown</button></li>
+                        <li><button type="button" (click)="copy(file, 'html')">HTML</button></li>
+                        <li><button type="button" (click)="copy(file, 'bbcode')">BBCode</button></li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            }
+          </div>
+          </div>
+        } @else {
+          <app-file-table
+            class="min-h-0 flex-1"
+            [files]="state().listing!.files"
+            [selected]="selected()"
+            (toggled)="toggle($event.id, $event.checked)"
+            (previewed)="preview($event)"
+            (copied)="copy($event.file, $event.format)"
+            (pressed)="rememberDragOrigin($event)"
+            (dragStarted)="onFileDragStart($event.event, $event.id)"
+            (dragEnded)="onFileDragEnd()"
+          />
+        }
+      }
+      </div>
+    </div>
+  </div>
+  <app-confirm-delete (closed)="onConfirmed($event)" />
+  <app-folder-prompt (named)="onFolderNamed($event)" />
+  <app-move-dialog (moved)="onMoved()" />
+  <app-preview-dialog />
+</section>

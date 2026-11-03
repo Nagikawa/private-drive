@@ -1,0 +1,200 @@
+import { createHash } from "node:crypto"
+import { Context, Effect, Layer, Redacted, Schema } from "effect"
+import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http"
+import * as Base64 from "effect/encoding/Base64"
+import { StorageError, contentTypeFromName, splitStorageKey } from "@private-drive/domain"
+import { AppConfig } from "../config.ts"
+import { bytesOf, unavailable, type RemoteFile, type RemoteListing } from "./shared.ts"
+
+export class HuggingFace extends Context.Service<HuggingFace, {
+  readonly configured: boolean
+  delete(key: string): Effect.Effect<void, StorageError>
+  get(key: string): Effect.Effect<Uint8Array, StorageError>
+  list(folder: string, recursive: boolean): Effect.Effect<RemoteListing, StorageError>
+  put(key: string, bytes: Uint8Array): Effect.Effect<void, StorageError>
+  status(): Effect.Effect<string, StorageError>
+}>()("private-drive/api/storage/HuggingFace") {
+  // Uses the dataset API for small files and LFS for anything the commit endpoint will not inline.
+  static readonly layer = Layer.effect(
+    HuggingFace,
+    Effect.gen(function*() {
+      const config = yield* AppConfig
+      const raw = yield* HttpClient.HttpClient
+      const http = raw.pipe(HttpClient.filterStatusOk)
+
+      // Builds an authenticated dataset URL, or nothing when the repo token is missing.
+      const targetFor = (path: string) => {
+        if (config.huggingface === undefined) {
+          return undefined
+        }
+        return {
+          repo: config.huggingface.repo,
+          token: Redacted.value(config.huggingface.token),
+          url: `https://huggingface.co/api/datasets/${config.huggingface.repo}${path}`,
+        }
+      }
+
+      // Commits an ndjson batch so create, upload, and delete share one write path.
+      const commit = Effect.fn("HuggingFace.commit")(function*(operations: ReadonlyArray<unknown>) {
+        const target = targetFor("/commit/main")
+        if (target === undefined) {
+          return yield* unavailable("huggingface")
+        }
+        const body = operations.map((operation) => JSON.stringify(operation)).join("\n")
+        yield* HttpClientRequest.post(target.url).pipe(
+          HttpClientRequest.bearerToken(target.token),
+          HttpClientRequest.bodyText(body, "application/x-ndjson"),
+          http.execute,
+          Effect.mapError(() => new StorageError({ message: "Hugging Face write failed" })),
+        )
+      })
+
+      // Stores a file inline when it is small, otherwise uploads the blob through LFS and commits the pointer.
+      const put = Effect.fn("HuggingFace.put")(function*(key: string, bytes: Uint8Array) {
+        if (bytesOf(bytes) <= 8 * 1024 * 1024) {
+          yield* commit([
+            { key: "header", value: { description: "", summary: "upload" } },
+            { key: "file", value: { content: Base64.encode(bytes), encoding: "base64", path: key } },
+          ])
+          return
+        }
+        const target = targetFor("")
+        if (target === undefined) {
+          return yield* unavailable("huggingface")
+        }
+        const oid = createHash("sha256").update(bytes).digest("hex")
+        const batch = yield* HttpClientRequest.post(
+          `https://huggingface.co/datasets/${target.repo}.git/info/lfs/objects/batch`,
+        ).pipe(
+          HttpClientRequest.bearerToken(target.token),
+          HttpClientRequest.acceptJson,
+          HttpClientRequest.bodyJsonUnsafe({
+            hash_algo: "sha256",
+            objects: [{ oid, size: bytesOf(bytes) }],
+            operation: "upload",
+            transfers: ["basic"],
+          }),
+          http.execute,
+          Effect.flatMap(HttpClientResponse.schemaBodyJson(Schema.Struct({
+            objects: Schema.Array(Schema.Struct({
+              actions: Schema.optional(Schema.Struct({
+                upload: Schema.optional(Schema.Struct({
+                  header: Schema.optional(Schema.Record(Schema.String, Schema.String)),
+                  href: Schema.String,
+                })),
+              })),
+            })),
+          }))),
+          Effect.mapError(() => new StorageError({ message: "Hugging Face LFS upload failed" })),
+        )
+        const upload = batch.objects[0]?.actions?.upload
+        if (upload !== undefined) {
+          yield* HttpClientRequest.put(upload.href).pipe(
+            HttpClientRequest.setHeaders(upload.header ?? {}),
+            HttpClientRequest.bodyUint8Array(bytes),
+            http.execute,
+            Effect.mapError(() => new StorageError({ message: "Hugging Face LFS transfer failed" })),
+          )
+        }
+        yield* commit([
+          { key: "header", value: { description: "", summary: "upload" } },
+          { key: "lfsFile", value: { algo: "sha256", oid, path: key, size: bytesOf(bytes) } },
+        ])
+      })
+
+      // Lists a dataset tree and treats a missing path as an empty folder rather than a hard failure.
+      const list = Effect.fn("HuggingFace.list")(function*(folder: string, recursive: boolean) {
+        const encoded = folder.split("/").filter((part) => part !== "").map(encodeURIComponent).join("/")
+        const target = targetFor(encoded === "" ? "/tree/main" : `/tree/main/${encoded}`)
+        if (target === undefined) {
+          return yield* unavailable("huggingface")
+        }
+        const url = `${target.url}${recursive ? "?recursive=true" : ""}`
+        const response = yield* HttpClientRequest.get(url).pipe(
+          HttpClientRequest.bearerToken(target.token),
+          HttpClientRequest.acceptJson,
+          raw.execute,
+          Effect.mapError(() => new StorageError({ message: "Hugging Face list failed" })),
+        )
+        if (response.status === 404) {
+          return { files: [], folders: [], truncated: false }
+        }
+        if (response.status < 200 || response.status >= 300) {
+          return yield* new StorageError({ message: `Hugging Face list failed (${response.status})` })
+        }
+        const items = yield* HttpClientResponse.schemaBodyJson(Schema.Array(Schema.Struct({
+          path: Schema.String,
+          size: Schema.optional(Schema.Number),
+          type: Schema.String,
+        })))(response).pipe(Effect.mapError(() => new StorageError({ message: "Could not parse the Hugging Face list" })))
+        const files: Array<RemoteFile> = []
+        const folders: Array<string> = []
+        for (const item of items) {
+          if (item.type === "directory") {
+            folders.push(item.path)
+            continue
+          }
+          if (item.type === "file") {
+            const parts = yield* splitStorageKey(item.path)
+            files.push({
+              contentType: yield* contentTypeFromName(parts.name),
+              key: item.path,
+              size: Math.trunc(item.size ?? 0),
+            })
+          }
+        }
+        return { files: files.slice(0, 400), folders, truncated: files.length > 400 }
+      })
+
+      // Downloads a dataset file by its storage key for preview and for moves between folders.
+      const get = Effect.fn("HuggingFace.get")(function*(key: string) {
+        const target = targetFor("")
+        if (target === undefined) {
+          return yield* unavailable("huggingface")
+        }
+        const encoded = key.split("/").map(encodeURIComponent).join("/")
+        const response = yield* HttpClientRequest.get(
+          `https://huggingface.co/datasets/${target.repo}/resolve/main/${encoded}`,
+        ).pipe(
+          HttpClientRequest.bearerToken(target.token),
+          http.execute,
+          Effect.mapError(() => new StorageError({ message: "Hugging Face download failed" })),
+        )
+        const buffer = yield* response.arrayBuffer.pipe(
+          Effect.mapError(() => new StorageError({ message: "Hugging Face download failed" })),
+        )
+        return new Uint8Array(buffer)
+      })
+
+      // Deletes a path with a commit so an empty folder marker or a moved file leaves the dataset.
+      const remove = Effect.fn("HuggingFace.delete")(function*(key: string) {
+        yield* commit([
+          { key: "header", value: { description: "", summary: "delete" } },
+          { key: "deletedFile", value: { path: key } },
+        ])
+      })
+
+      // Reads the dataset metadata so the source list can show the repo when the token works.
+      const status = Effect.fn("HuggingFace.status")(function*() {
+        if (config.huggingface === undefined) {
+          return "Not configured"
+        }
+        yield* HttpClientRequest.get(`https://huggingface.co/api/datasets/${config.huggingface.repo}`).pipe(
+          HttpClientRequest.bearerToken(Redacted.value(config.huggingface.token)),
+          http.execute,
+          Effect.mapError(() => new StorageError({ message: "Hugging Face did not respond" })),
+        )
+        return `Connected ${config.huggingface.repo}`
+      })
+
+      return HuggingFace.of({
+        configured: config.huggingface !== undefined,
+        delete: remove,
+        get,
+        list,
+        put,
+        status,
+      })
+    }),
+  )
+}

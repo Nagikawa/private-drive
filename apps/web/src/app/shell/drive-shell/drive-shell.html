@@ -1,0 +1,67 @@
+<div class="navbar shrink-0 bg-base-100 shadow-sm">
+  <div class="navbar-start w-auto shrink-0 gap-2">
+    <a class="btn btn-ghost text-xl" routerLink="/files">Private Drive</a>
+    <fieldset class="fieldset w-fit shrink-0">
+      <select
+        #sourceSelect
+        class="select"
+        aria-label="Source"
+        [value]="workspace.source()"
+        (change)="onSource($event)"
+      >
+        @for (status of sources(); track status.id) {
+          <option [value]="status.id">{{ status.label }}</option>
+        }
+      </select>
+    </fieldset>
+    @if (resourceLabel(); as name) {
+      <span class="whitespace-nowrap text-sm">{{ name }}</span>
+    }
+  </div>
+  <div class="navbar-center">
+    <ul class="menu menu-horizontal px-1">
+      <li>
+        <a routerLink="/files" routerLinkActive="menu-active" ariaCurrentWhenActive="page">Files</a>
+      </li>
+    </ul>
+  </div>
+  <div class="navbar-end gap-2">
+    <label class="toggle text-base-content">
+      <input
+        type="checkbox"
+        aria-label="Toggle dark theme"
+        [checked]="workspace.dark()"
+        (change)="workspace.toggleTheme()"
+      />
+      <svg aria-hidden="true" class="pointer-events-none" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+        <g stroke-linejoin="round" stroke-linecap="round" stroke-width="2" fill="none" stroke="currentColor">
+          <circle cx="12" cy="12" r="4"></circle>
+          <path d="M12 2v2"></path>
+          <path d="M12 20v2"></path>
+          <path d="m4.93 4.93 1.41 1.41"></path>
+          <path d="m17.66 17.66 1.41 1.41"></path>
+          <path d="M2 12h2"></path>
+          <path d="M20 12h2"></path>
+          <path d="m6.34 17.66-1.41 1.41"></path>
+          <path d="m19.07 4.93-1.41 1.41"></path>
+        </g>
+      </svg>
+      <svg aria-hidden="true" class="pointer-events-none" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+        <g stroke-linejoin="round" stroke-linecap="round" stroke-width="2" fill="none" stroke="currentColor">
+          <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"></path>
+        </g>
+      </svg>
+    </label>
+    <button class="btn btn-ghost" type="button" (click)="logout()">Log out</button>
+  </div>
+</div>
+<main class="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto p-4">
+  <router-outlet />
+</main>
+@if (notices.message()) {
+  <div class="toast toast-end">
+    <div class="alert" role="status">
+      <span>{{ notices.message() }}</span>
+    </div>
+  </div>
+}
