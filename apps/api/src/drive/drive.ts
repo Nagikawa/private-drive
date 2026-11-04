@@ -178,10 +178,7 @@ export class Drive extends Context.Service<Drive, {
         let storageKeyValue = key
         let telegramMessageId: number | undefined
         if (input.source === "telegram") {
-          const bytes = yield* fs.readFile(input.path).pipe(
-            Effect.mapError(() => new StorageError({ message: "Could not read the uploaded temporary file" })),
-          )
-          const stored = yield* telegram.put(key, bytes, input.contentType)
+          const stored = yield* telegram.put(key, input.path, input.contentType)
           storageKeyValue = stored.storageKey
           telegramMessageId = stored.messageId
         } else if (input.source === "huggingface") {

@@ -1,3 +1,4 @@
+import { openAsBlob } from "node:fs"
 import { Context, Effect, Layer, Redacted, Schema, Stream } from "effect"
 import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http"
 import { StorageError, splitStorageKey } from "@private-drive/domain"
@@ -14,7 +15,7 @@ export class Telegram extends Context.Service<Telegram, {
   deleteMessage(messageId: number): Effect.Effect<void, StorageError>
   get(fileId: string): Effect.Effect<Uint8Array, StorageError>
   open(fileId: string): Effect.Effect<Stream.Stream<Uint8Array, StorageError>, StorageError>
-  put(key: string, bytes: Uint8Array, contentType: string): Effect.Effect<TelegramStored, StorageError>
+  put(key: string, path: string, contentType: string): Effect.Effect<TelegramStored, StorageError>
   status(): Effect.Effect<string, StorageError>
 }>()("private-drive/api/storage/Telegram") {
   // Talks to the bot API with the configured token, and fails closed when the bot is unset.
@@ -39,15 +40,19 @@ export class Telegram extends Context.Service<Telegram, {
         )
       })
 
-      // Uploads a document and keeps Telegram's file id, because the chat is the actual store.
-      const put = Effect.fn("Telegram.put")(function*(key: string, bytes: Uint8Array, contentType: string) {
+      // Uploads a document from disk and keeps Telegram's file id, because the chat is the actual store.
+      const put = Effect.fn("Telegram.put")(function*(key: string, path: string, contentType: string) {
         if (config.telegram === undefined) {
           return yield* unavailable("telegram")
         }
         const form = new FormData()
         form.set("chat_id", config.telegram.chatId)
         const name = (yield* splitStorageKey(key)).name
-        form.set("document", new File([Uint8Array.from(bytes)], name, { type: contentType }))
+        const blob = yield* Effect.tryPromise({
+          catch: () => new StorageError({ message: "Could not read the uploaded temporary file" }),
+          try: () => openAsBlob(path, { type: contentType }),
+        })
+        form.set("document", blob, name)
         const result = yield* HttpClientRequest.post("/sendDocument").pipe(
           HttpClientRequest.bodyFormData(form),
           call,
