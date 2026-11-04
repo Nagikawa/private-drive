@@ -12,6 +12,7 @@ import { Drive } from "./drive/drive.ts"
 import { ContentRoute } from "./http/content.ts"
 import { FilesHandlers } from "./http/files.ts"
 import { HealthRoute } from "./http/health.ts"
+import { MetricsRoute, recordResponses } from "./http/metrics.ts"
 
 // JSON routes and the raw content route share one drive layer so the index lock is process-wide.
 const Routes = Layer.mergeAll(
@@ -21,6 +22,7 @@ const Routes = Layer.mergeAll(
   ),
   ContentRoute,
   HealthRoute,
+  MetricsRoute,
 )
 
 // Reads the port, then launches HTTP with auth, the drive, and the platform services underneath.
@@ -28,7 +30,7 @@ const Server = Layer.unwrap(
   Effect.gen(function*() {
     const config = yield* AppConfig
     yield* Effect.logInfo(`私人網盤 API 監聽 ${config.port}`)
-    return HttpRouter.serve(Routes).pipe(
+    return HttpRouter.serve(Routes, { middleware: recordResponses }).pipe(
       Layer.provide(Drive.layer),
       Layer.provide(SessionLive),
       Layer.provide(SessionLedger.layer),
