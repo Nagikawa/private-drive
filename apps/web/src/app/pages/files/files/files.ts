@@ -14,7 +14,7 @@ import {
   type LinkFormat,
   type Listing,
 } from '@private-drive/domain';
-import { Subject, combineLatest, debounceTime, distinctUntilChanged, map, of, startWith, switchMap } from 'rxjs';
+import { EMPTY, Subject, combineLatest, debounceTime, distinctUntilChanged, map, of, startWith, switchMap } from 'rxjs';
 import { ClipboardFailure } from '../../../core/drive-error';
 import { DriveApi } from '../../../services/drive-api/drive-api.service';
 import { DriveRuntime } from '../../../services/drive-runtime/drive-runtime.service';
@@ -32,7 +32,22 @@ import { FolderTree } from '../../../components/folder-tree/folder-tree';
 interface BrowseState {
   listing: Listing | undefined;
   error: string;
+  page: number;
+  hasPrev: boolean;
+  hasNext: boolean;
 }
+
+type FileSort = 'name-asc' | 'name-desc' | 'size-asc' | 'size-desc' | 'created-asc' | 'created-desc';
+
+const fileSorts: ReadonlyArray<FileSort> = ['name-asc', 'name-desc', 'size-asc', 'size-desc', 'created-asc', 'created-desc'];
+
+const parseFileSort = (value: FileSort): { sort: 'name' | 'size' | 'created'; order: 'asc' | 'desc' } => {
+  const [sort, order] = value.split('-');
+  if ((sort === 'name' || sort === 'size' || sort === 'created') && (order === 'asc' || order === 'desc')) {
+    return { sort, order };
+  }
+  return { sort: 'name', order: 'asc' };
+};
 
 @Component({
   selector: 'app-files',
@@ -47,6 +62,7 @@ export class Files {
   private readonly router = inject(Router);
   private readonly notices = inject(Notices);
   private readonly refresh$ = new Subject<void>();
+  private readonly turnPage$ = new Subject<'next' | 'prev'>();
   private readonly confirm = viewChild.required(ConfirmDelete);
   private readonly folderPrompt = viewChild.required(FolderPrompt);
   private readonly moveDialog = viewChild.required(MoveDialog);
@@ -59,6 +75,7 @@ export class Files {
   private readonly pendingRename = signal<FileEntry | undefined>(undefined);
   protected readonly workspace = inject(Workspace);
   protected readonly search = signal('');
+  protected readonly sort = signal<FileSort>('name-asc');
   protected readonly selected = signal<ReadonlyArray<string>>([]);
   protected readonly selectedFolders = signal<ReadonlyArray<string>>([]);
   protected readonly uploading = signal(false);
@@ -110,25 +127,87 @@ export class Files {
       toObservable(this.workspace.source),
       toObservable(this.folder),
       toObservable(this.search).pipe(debounceTime(250), distinctUntilChanged()),
+      toObservable(this.sort),
       this.refresh$.pipe(startWith(undefined)),
     ]).pipe(
-      switchMap(([source, folder, search]) =>
-        this.runtime.bind(
-          this.api.list({ source, folder, search, kind: 'all', recursive: 'false' }).pipe(
-            Effect.tap(() =>
-              Effect.sync(() => {
-                this.selected.set([]);
-                this.selectedFolders.set([]);
-              }),
-            ),
-            Effect.map((listing): BrowseState => ({ listing, error: '' })),
-            Effect.catch((error) => Effect.succeed<BrowseState>({ listing: undefined, error: error.message })),
-          ),
-        ),
-      ),
+      switchMap(([source, folder, search, sort]) => {
+        const parsed = parseFileSort(sort);
+        const history: Array<string | undefined> = [undefined];
+        let index = 0;
+        return this.turnPage$.pipe(
+          startWith(undefined),
+          switchMap((turn) => {
+            if (turn === 'next') {
+              if (history[index + 1] === undefined) {
+                return EMPTY;
+              }
+              index += 1;
+            } else if (turn === 'prev') {
+              if (index === 0) {
+                return EMPTY;
+              }
+              index -= 1;
+            } else {
+              index = 0;
+            }
+            const cursor = history[index];
+            return this.runtime.bind(
+              this.api.list({
+                source,
+                folder,
+                search,
+                kind: 'all',
+                recursive: 'false',
+                sort: parsed.sort,
+                order: parsed.order,
+                ...(cursor === undefined ? {} : { cursor }),
+              }).pipe(
+                Effect.tap((listing) =>
+                  Effect.sync(() => {
+                    this.selected.set([]);
+                    this.selectedFolders.set([]);
+                    if (listing.next !== undefined) {
+                      history[index + 1] = listing.next;
+                    }
+                  }),
+                ),
+                Effect.map((listing): BrowseState => ({
+                  listing,
+                  error: '',
+                  page: index + 1,
+                  hasPrev: index > 0,
+                  hasNext: listing.next !== undefined,
+                })),
+                Effect.catch((error) =>
+                  Effect.succeed<BrowseState>({
+                    listing: undefined,
+                    error: error.message,
+                    page: index + 1,
+                    hasPrev: false,
+                    hasNext: false,
+                  }),
+                ),
+              ),
+            );
+          }),
+        );
+      }),
     ),
-    { initialValue: { listing: undefined, error: '' } satisfies BrowseState },
+    { initialValue: { listing: undefined, error: '', page: 1, hasPrev: false, hasNext: false } satisfies BrowseState },
   );
+
+  // Asks for the previous or next page of the current folder.
+  protected turnPage(direction: 'next' | 'prev'): void {
+    this.turnPage$.next(direction);
+  }
+
+  // Changes the server sort and returns to the first page.
+  protected setSort(value: string): void {
+    const match = fileSorts.find((item) => item === value);
+    if (match !== undefined) {
+      this.sort.set(match);
+    }
+  }
 
   // True when a file or folder checkbox is on, so the action icons know there is something to act on.
   protected readonly hasSelection = computed(() => this.selected().length > 0 || this.selectedFolders().length > 0);

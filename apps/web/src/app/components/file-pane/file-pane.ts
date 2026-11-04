@@ -36,6 +36,10 @@ export class FilePane {
   readonly crumbs = input<ReadonlyArray<FolderCrumb>>([]);
   readonly showCrumbs = input(true);
   readonly search = input('');
+  readonly sort = input('name-asc');
+  readonly page = input(1);
+  readonly hasPrev = input(false);
+  readonly hasNext = input(false);
   readonly listing = input<Listing | undefined>(undefined);
   readonly error = input('');
   readonly selected = input<ReadonlyArray<string>>([]);
@@ -45,6 +49,8 @@ export class FilePane {
   readonly contentUrl = input.required<(id: string) => string>();
 
   readonly searched = output<string>();
+  readonly sorted = output<string>();
+  readonly paged = output<'prev' | 'next'>();
   readonly opened = output<string>();
   readonly toggled = output<FilePaneToggle>();
   readonly toggledAll = output<boolean>();
@@ -135,6 +141,13 @@ export class FilePane {
   protected onSearch(event: Event): void {
     if (event.target instanceof HTMLInputElement) {
       this.searched.emit(event.target.value);
+    }
+  }
+
+  // Writes the sort choice back to the files page.
+  protected onSort(event: Event): void {
+    if (event.target instanceof HTMLSelectElement) {
+      this.sorted.emit(event.target.value);
     }
   }
 

@@ -14,6 +14,7 @@ import {
   isImageContent,
   isWithinFolder,
   normalizeFolder,
+  pageFiles,
   pure,
   nameKeepingType,
   sanitizeFileName,
@@ -58,10 +59,13 @@ export class Drive extends Context.Service<Drive, {
   createFolder(source: SourceId, path: string): Effect.Effect<FolderEntry, StorageError>
   deleteFolder(source: SourceId, path: string): Effect.Effect<void, NotFound | StorageError>
   list(input: {
+    readonly cursor?: string
     readonly folder: string
     readonly kind: "all" | "image"
+    readonly order: "asc" | "desc"
     readonly recursive: boolean
     readonly search: string
+    readonly sort: "name" | "size" | "created"
     readonly source: SourceId
   }): Effect.Effect<Listing, StorageError>
   read(id: string): Effect.Effect<{
@@ -219,10 +223,13 @@ export class Drive extends Context.Service<Drive, {
 
       // Reconciles the remote listing into the index, then filters it for the folder the UI asked for.
       const list = Effect.fn("Drive.list")(function*(input: {
+        readonly cursor?: string
         readonly folder: string
         readonly kind: "all" | "image"
+        readonly order: "asc" | "desc"
         readonly recursive: boolean
         readonly search: string
+        readonly sort: "name" | "size" | "created"
         readonly source: SourceId
       }) {
         yield* ensureSource(input.source)
@@ -298,14 +305,18 @@ export class Drive extends Context.Service<Drive, {
             : pure(isDirectChildFolder(folder, path), false)) &&
           (query === "" || pure(folderName(path), path).toLowerCase().includes(query))
         )
+        const page = pageFiles(yield* Effect.forEach(files, toEntry), {
+          ...(input.cursor === undefined ? {} : { cursor: input.cursor }),
+          order: input.order,
+          sort: input.sort,
+        })
         return new Listing({
-          files: (yield* Effect.forEach(files, toEntry)).sort((left, right) =>
-            left.name.localeCompare(right.name, "zh-Hant")
-          ),
+          files: page.files,
           folder,
           folders: folders.sort((left, right) => left.localeCompare(right, "zh-Hant")).map((path) =>
             new FolderEntry({ name: pure(folderName(path), path), path })
           ),
+          ...(page.next === undefined ? {} : { next: page.next }),
           source: input.source,
           truncated: remote.truncated,
         })

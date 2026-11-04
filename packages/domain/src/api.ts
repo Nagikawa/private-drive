@@ -57,10 +57,13 @@ export class FilesApi extends HttpApiGroup.make("files")
     HttpApiEndpoint.get("list", "/files", {
       error: StorageError,
       query: {
+        cursor: Schema.optional(Schema.String),
         folder: Schema.optional(Schema.String),
         kind: Schema.optional(Schema.Literals(["all", "image"])),
+        order: Schema.optional(Schema.Literals(["asc", "desc"])),
         recursive: Schema.optional(Schema.Literals(["true", "false"])),
         search: Schema.optional(Schema.String),
+        sort: Schema.optional(Schema.Literals(["name", "size", "created"])),
         source: SourceId,
       },
       success: Listing,

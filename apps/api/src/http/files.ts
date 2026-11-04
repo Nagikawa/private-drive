@@ -46,10 +46,13 @@ export const FilesHandlers = HttpApiBuilder.group(
       // Lists one folder, optionally searching or walking the whole tree for the sidebar.
       list: ({ query }) =>
         drive.list({
+          ...(query.cursor === undefined || query.cursor === "" ? {} : { cursor: query.cursor }),
           folder: query.folder ?? "",
           kind: query.kind ?? "all",
+          order: query.order ?? "asc",
           recursive: query.recursive === "true",
           search: query.search ?? "",
+          sort: query.sort ?? "name",
           source: query.source,
         }),
       // Moves the selected ids into another folder on the same source.

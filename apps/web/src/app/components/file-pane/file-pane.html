@@ -20,6 +20,14 @@
       (chosen)="onFolderAction($event)"
     />
     <input #fileInput class="hidden" type="file" multiple aria-hidden="true" tabindex="-1" (change)="onFiles($event)" />
+    <select class="select select-sm" aria-label="Sort" [value]="sort()" (change)="onSort($event)">
+      <option value="name-asc">Name</option>
+      <option value="name-desc">Name, Z to A</option>
+      <option value="created-desc">Newest</option>
+      <option value="created-asc">Oldest</option>
+      <option value="size-desc">Largest</option>
+      <option value="size-asc">Smallest</option>
+    </select>
     <div class="join" role="group" aria-label="View">
       <button
         class="join-item btn btn-sm btn-square transition-none!"
@@ -147,6 +155,13 @@
         (dragStarted)="onFileDragStart($event.event, $event.id)"
         (dragEnded)="onFileDragEnd()"
       />
+    }
+    @if (hasPrev() || hasNext()) {
+      <div class="join shrink-0" role="navigation" aria-label="Pages">
+        <button class="join-item btn btn-sm" type="button" [class.btn-disabled]="!hasPrev()" [disabled]="!hasPrev()" (click)="paged.emit('prev')">«</button>
+        <button class="join-item btn btn-sm btn-disabled" type="button" disabled>Page {{ page() }}</button>
+        <button class="join-item btn btn-sm" type="button" [class.btn-disabled]="!hasNext()" [disabled]="!hasNext()" (click)="paged.emit('next')">»</button>
+      </div>
     }
   }
 </div>

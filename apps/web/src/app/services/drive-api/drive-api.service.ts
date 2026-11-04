@@ -95,6 +95,9 @@ export class DriveApi {
     search?: string;
     kind: 'all' | 'image';
     recursive: 'true' | 'false';
+    cursor?: string;
+    sort?: 'name' | 'size' | 'created';
+    order?: 'asc' | 'desc';
   }): Effect.Effect<Listing, DriveFailure, DriveServices> {
     return call((client) => client.files.list({ query }));
   }

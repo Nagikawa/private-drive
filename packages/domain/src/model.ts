@@ -46,6 +46,8 @@ export class Listing extends Schema.Class<Listing>("private-drive/Listing")({
   folders: Schema.Array(FolderEntry),
   files: Schema.Array(FileEntry),
   truncated: Schema.Boolean,
+  // Present when another page of this folder follows the files in this response.
+  next: Schema.optional(Schema.String),
 }) {}
 
 export class SourceStatus extends Schema.Class<SourceStatus>("private-drive/SourceStatus")({
