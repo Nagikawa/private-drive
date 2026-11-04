@@ -124,9 +124,8 @@ export class R2 extends Context.Service<R2, {
             }
           }
           token = page.IsTruncated ? page.NextContinuationToken : undefined
-          if (files.length >= 400 && token !== undefined) {
+          if (page.IsTruncated === true && token === undefined) {
             truncated = true
-            token = undefined
           }
         } while (token !== undefined)
         return { files, folders: [...folderSet], truncated }

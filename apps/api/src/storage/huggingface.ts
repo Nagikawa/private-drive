@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto"
-import { ByteSize, Context, Effect, FileSystem, Layer, Redacted, Schema, Stream } from "effect"
-import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http"
+import { ByteSize, Context, Effect, FileSystem, Layer, Option, Redacted, Schema, Stream } from "effect"
+import { Headers, HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http"
 import * as Base64 from "effect/encoding/Base64"
 import { StorageError, contentTypeFromName, splitStorageKey, uploadParts } from "@private-drive/domain"
 import { AppConfig } from "../config.ts"
@@ -296,6 +296,27 @@ export class HuggingFace extends Context.Service<HuggingFace, {
         ])
       })
 
+      const TreeItem = Schema.Struct({
+        path: Schema.String,
+        size: Schema.optional(Schema.Number),
+        type: Schema.String,
+      })
+
+      // The dataset tree uses a Link header when the folder continues on another page.
+      const nextTreePage = (link: string | undefined): string | undefined => {
+        if (link === undefined) {
+          return undefined
+        }
+        for (const part of link.split(",")) {
+          const match = /<([^>]+)>\s*;\s*rel="?next"?/i.exec(part)
+          const url = match?.[1]
+          if (url !== undefined) {
+            return url
+          }
+        }
+        return undefined
+      }
+
       // Lists a dataset tree and treats a missing path as an empty folder rather than a hard failure.
       const list = Effect.fn("HuggingFace.list")(function*(folder: string, recursive: boolean) {
         const encoded = folder.split("/").filter((part) => part !== "").map(encodeURIComponent).join("/")
@@ -303,41 +324,53 @@ export class HuggingFace extends Context.Service<HuggingFace, {
         if (target === undefined) {
           return yield* unavailable("huggingface")
         }
-        const url = `${target.url}${recursive ? "?recursive=true" : ""}`
-        const response = yield* HttpClientRequest.get(url).pipe(
-          HttpClientRequest.bearerToken(target.token),
-          HttpClientRequest.acceptJson,
-          raw.execute,
-          Effect.mapError(() => new StorageError({ message: "Hugging Face list failed" })),
-        )
-        if (response.status === 404) {
-          return { files: [], folders: [], truncated: false }
-        }
-        if (response.status < 200 || response.status >= 300) {
-          return yield* new StorageError({ message: `Hugging Face list failed (${response.status})` })
-        }
-        const items = yield* HttpClientResponse.schemaBodyJson(Schema.Array(Schema.Struct({
-          path: Schema.String,
-          size: Schema.optional(Schema.Number),
-          type: Schema.String,
-        })))(response).pipe(Effect.mapError(() => new StorageError({ message: "Could not parse the Hugging Face list" })))
         const files: Array<RemoteFile> = []
         const folders: Array<string> = []
-        for (const item of items) {
-          if (item.type === "directory") {
-            folders.push(item.path)
-            continue
+        let url: string | undefined = `${target.url}${recursive ? "?recursive=true" : ""}`
+        let truncated = false
+        while (url !== undefined) {
+          const pageUrl: string = url
+          const response = yield* HttpClientRequest.get(pageUrl).pipe(
+            HttpClientRequest.bearerToken(target.token),
+            HttpClientRequest.acceptJson,
+            raw.execute,
+            Effect.mapError(() => new StorageError({ message: "Hugging Face list failed" })),
+          )
+          if (response.status === 404) {
+            return { files: [], folders: [], truncated: false }
           }
-          if (item.type === "file") {
-            const parts = yield* splitStorageKey(item.path)
-            files.push({
-              contentType: yield* contentTypeFromName(parts.name),
-              key: item.path,
-              size: Math.trunc(item.size ?? 0),
-            })
+          if (response.status < 200 || response.status >= 300) {
+            return yield* new StorageError({ message: `Hugging Face list failed (${response.status})` })
+          }
+          const items = yield* HttpClientResponse.schemaBodyJson(Schema.Array(TreeItem))(response).pipe(
+            Effect.mapError(() => new StorageError({ message: "Could not parse the Hugging Face list" })),
+          )
+          for (const item of items) {
+            if (item.type === "directory") {
+              folders.push(item.path)
+              continue
+            }
+            if (item.type === "file") {
+              const parts = yield* splitStorageKey(item.path)
+              files.push({
+                contentType: yield* contentTypeFromName(parts.name),
+                key: item.path,
+                size: Math.trunc(item.size ?? 0),
+              })
+            }
+          }
+          const link = Option.getOrUndefined(Headers.get(response.headers, "link"))
+          const next = nextTreePage(link)
+          if (next === undefined) {
+            url = undefined
+          } else if (next === pageUrl) {
+            truncated = true
+            url = undefined
+          } else {
+            url = next
           }
         }
-        return { files: files.slice(0, 400), folders, truncated: files.length > 400 }
+        return { files, folders, truncated }
       })
 
       // Opens a dataset file as a byte stream so a download does not hold the whole file in memory.
