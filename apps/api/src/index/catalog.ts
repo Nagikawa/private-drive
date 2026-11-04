@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto"
-import { Context, Effect, FileSystem, Layer, Path, Schema, Semaphore } from "effect"
+import { open, readFile, rm } from "node:fs/promises"
+import { Context, Effect, FileSystem, Layer, Path, Predicate, Result, Schema } from "effect"
 import { StorageError } from "@private-drive/domain"
 import { AppConfig } from "../config.ts"
 import { CatalogData } from "./schema.ts"
@@ -18,13 +19,23 @@ const asIndexError = (cause: unknown) =>
       : "Could not read or write the index",
   })
 
+// A lock held by a process that no longer exists can be removed.
+const ownerAlive = (pid: number): boolean => {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (cause) {
+    return Predicate.hasProperty(cause, "code") && cause.code === "EPERM"
+  }
+}
+
 export class Catalog extends Context.Service<Catalog, {
   readonly modify: <A>(
     use: (catalog: CatalogData) => readonly [CatalogData, A],
   ) => Effect.Effect<A, StorageError>
   readonly read: Effect.Effect<CatalogData, StorageError>
 }>()("private-drive/Catalog") {
-  // Serializes index reads and writes so two requests cannot overwrite the JSON file.
+  // Serializes index writes across processes so two API instances cannot overwrite the JSON file.
   static readonly layer = Layer.effect(
     Catalog,
     Effect.gen(function*() {
@@ -32,7 +43,58 @@ export class Catalog extends Context.Service<Catalog, {
       const path = yield* Path.Path
       const config = yield* AppConfig
       const indexPath = config.indexPath
-      const lock = yield* Semaphore.make(1)
+      const lockPath = `${indexPath}.lock`
+      const owner = String(process.pid)
+
+      // Creates the lock exclusively, or drops a lock whose owner process has exited.
+      const acquire = Effect.fn("Catalog.acquire")(function*() {
+        const deadline = Date.now() + 15_000
+        while (Date.now() < deadline) {
+          const created = yield* Effect.tryPromise({
+            catch: (cause) => cause,
+            try: async () => {
+              const handle = await open(lockPath, "wx")
+              await handle.writeFile(owner)
+              await handle.close()
+            },
+          }).pipe(Effect.result)
+          if (Result.isSuccess(created)) {
+            return
+          }
+          if (!(Predicate.hasProperty(created.failure, "code") && created.failure.code === "EEXIST")) {
+            return yield* new StorageError({ message: "Could not lock the index" })
+          }
+          const holder = yield* Effect.tryPromise({
+            catch: () => new StorageError({ message: "Could not read the index lock" }),
+            try: () => readFile(lockPath, "utf8"),
+          }).pipe(Effect.catch(() => Effect.succeed("")))
+          const pid = Number(holder)
+          if (!Number.isInteger(pid) || pid <= 0 || !ownerAlive(pid)) {
+            yield* Effect.tryPromise({
+              catch: () => new StorageError({ message: "Could not remove a stale index lock" }),
+              try: () => rm(lockPath, { force: true }),
+            }).pipe(Effect.catch(() => Effect.void))
+            continue
+          }
+          yield* Effect.sleep("50 millis")
+        }
+        return yield* new StorageError({ message: "The index is busy" })
+      })
+
+      // Removes the lock only when this process still owns it.
+      const release = Effect.fn("Catalog.release")(function*() {
+        const holder = yield* Effect.tryPromise({
+          catch: () => new StorageError({ message: "Could not read the index lock" }),
+          try: () => readFile(lockPath, "utf8"),
+        }).pipe(Effect.catch(() => Effect.succeed("")))
+        if (holder !== owner) {
+          return
+        }
+        yield* Effect.tryPromise({
+          catch: () => new StorageError({ message: "Could not release the index lock" }),
+          try: () => rm(lockPath, { force: true }),
+        }).pipe(Effect.catch(() => Effect.void))
+      })
 
       // Loads the local JSON index, treating a missing or blank file as an empty catalog.
       const read = Effect.fn("Catalog.read")(function*() {
@@ -58,12 +120,17 @@ export class Catalog extends Context.Service<Catalog, {
 
       // Holds the index lock for one read-modify-write so list and upload stay consistent.
       const modify = <A>(use: (catalog: CatalogData) => readonly [CatalogData, A]) =>
-        lock.withPermits(1)(Effect.gen(function*() {
-          const current = yield* read()
-          const [next, value] = use(current)
-          yield* write(next)
-          return value
-        }))
+        Effect.acquireUseRelease(
+          acquire(),
+          () =>
+            Effect.gen(function*() {
+              const current = yield* read()
+              const [next, value] = use(current)
+              yield* write(next)
+              return value
+            }),
+          () => release(),
+        )
 
       return Catalog.of({
         modify,
