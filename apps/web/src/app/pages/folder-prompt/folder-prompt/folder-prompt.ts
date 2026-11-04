@@ -11,15 +11,19 @@ import { SessionFailure } from '../../../core/drive-error';
 export class FolderPrompt {
   private readonly dialog = viewChild.required<ElementRef<HTMLDialogElement>>('dialog');
   readonly named = output<string>();
+  protected readonly title = signal('New folder');
+  protected readonly action = signal('Create');
   private readonly model = signal({ name: '' });
   // Requires a folder name before the dialog can close with a value.
   protected readonly nameForm = form(this.model, (path) => {
-    required(path.name, { message: 'Enter a folder name' });
+    required(path.name, { message: 'Enter a name' });
   });
 
-  // Opens a blank name dialog for the folder the user is about to create.
-  open(): void {
-    this.model.set({ name: '' });
+  // Opens the name dialog, optionally filled with the current file name.
+  open(name = '', title = 'New folder', action = 'Create'): void {
+    this.title.set(title);
+    this.action.set(action);
+    this.model.set({ name });
     const element = this.dialog().nativeElement;
     if (!element.open) {
       element.showModal();

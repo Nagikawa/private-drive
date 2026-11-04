@@ -11,6 +11,7 @@ import {
   LoginPayload,
   MovePayload,
   MoveResult,
+  RenamePayload,
   NotFound,
   SourceStatus,
   StorageError,
@@ -116,6 +117,11 @@ export class DriveApi {
   // Moves the selected files into another folder.
   move(ids: ReadonlyArray<string>, folder: string): Effect.Effect<MoveResult, DriveFailure, DriveServices> {
     return call((client) => client.files.move({ payload: MovePayload.make({ folder, ids }) }));
+  }
+
+  // Renames one file. The server keeps the stored extension.
+  rename(id: string, name: string): Effect.Effect<FileEntry, DriveFailure, DriveServices> {
+    return call((client) => client.files.rename({ payload: RenamePayload.make({ id, name }) }));
   }
 
   // Stores a file fetched from a public URL.

@@ -1,4 +1,4 @@
-import { Component, ElementRef, computed, effect, inject, signal, viewChild } from '@angular/core';
+import { Component, computed, inject, signal, viewChild } from '@angular/core';
 import { toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router } from '@angular/router';
 import { Effect } from 'effect';
@@ -24,9 +24,9 @@ import { ConfirmDelete } from '../../confirm-delete';
 import { FolderPrompt } from '../../folder-prompt/folder-prompt/folder-prompt';
 import { MoveDialog } from '../../move-dialog/move-dialog';
 import { PreviewDialog } from '../../preview/preview-dialog/preview-dialog';
-import { Breadcrumbs } from '../../../components/breadcrumbs/breadcrumbs';
-import { FileTable } from '../../../components/file-table/file-table';
-import { FolderActions, type FolderActionId } from '../../../components/folder-actions/folder-actions';
+import { FilePane, fileDragType } from '../../../components/file-pane/file-pane';
+import { type FileRowAction } from '../../../components/file-table/file-table';
+import { type FolderActionId } from '../../../components/folder-actions/folder-actions';
 import { FolderTree } from '../../../components/folder-tree/folder-tree';
 
 interface BrowseState {
@@ -34,11 +34,9 @@ interface BrowseState {
   error: string;
 }
 
-const fileDragType = 'application/x-private-drive-file';
-
 @Component({
   selector: 'app-files',
-  imports: [Breadcrumbs, ConfirmDelete, FileTable, FolderActions, FolderPrompt, FolderTree, MoveDialog, PreviewDialog],
+  imports: [ConfirmDelete, FilePane, FolderPrompt, FolderTree, MoveDialog, PreviewDialog],
   templateUrl: './files.html',
   host: { class: 'flex h-full min-h-0 min-w-0 flex-1 flex-col' },
 })
@@ -53,34 +51,23 @@ export class Files {
   private readonly folderPrompt = viewChild.required(FolderPrompt);
   private readonly moveDialog = viewChild.required(MoveDialog);
   private readonly previewDialog = viewChild.required(PreviewDialog);
-  private readonly allBox = viewChild<ElementRef<HTMLInputElement>>('allBox');
-  private readonly fileInput = viewChild.required<ElementRef<HTMLInputElement>>('fileInput');
   private readonly pendingDelete = signal<
-    | { kind: 'files' }
+    | { kind: 'files'; ids: ReadonlyArray<string> }
     | { kind: 'mixed'; ids: ReadonlyArray<string>; paths: ReadonlyArray<string> }
     | undefined
   >(undefined);
+  private readonly pendingRename = signal<FileEntry | undefined>(undefined);
   protected readonly workspace = inject(Workspace);
   protected readonly search = signal('');
-  protected readonly view = signal<'grid' | 'list'>('grid');
   protected readonly selected = signal<ReadonlyArray<string>>([]);
   protected readonly selectedFolders = signal<ReadonlyArray<string>>([]);
   protected readonly uploading = signal(false);
   protected readonly uploadStatus = signal('');
   protected readonly dropTarget = signal<string | null>(null);
-  private dragOrigin: EventTarget | null = null;
   private draggingId = '';
 
-  // Syncs the select-all checkbox, including the indeterminate state a binding cannot express.
-  constructor() {
-    // Keeps the select-all box indeterminate when only some files are checked.
-    effect(() => {
-      const element = this.allBox()?.nativeElement;
-      if (element !== undefined) {
-        element.indeterminate = this.someSelected();
-      }
-    });
-  }
+  // Returns the content URL used by image and media previews.
+  protected readonly contentUrl = (id: string): string => this.api.contentUrl(id);
 
   protected readonly folder = toSignal(
     this.route.queryParamMap.pipe(map((params) => params.get('folder') ?? '')),
@@ -146,42 +133,6 @@ export class Files {
   // True when a file or folder checkbox is on, so the action icons know there is something to act on.
   protected readonly hasSelection = computed(() => this.selected().length > 0 || this.selectedFolders().length > 0);
 
-  // True when every file in the current list is selected.
-  protected readonly allSelected = computed(() => {
-    const listing = this.state().listing;
-    if (listing === undefined || listing.files.length === 0) {
-      return false;
-    }
-    return listing.files.every((file) => this.selected().includes(file.id));
-  });
-
-  // True when the select-all box should look partial rather than checked or empty.
-  protected readonly someSelected = computed(() => {
-    const listing = this.state().listing;
-    if (listing === undefined || listing.files.length === 0) {
-      return false;
-    }
-    const count = listing.files.filter((file) => this.selected().includes(file.id)).length;
-    return count > 0 && count < listing.files.length;
-  });
-
-  // Writes the search box into the signal that reloads the listing.
-  protected onSearch(event: Event): void {
-    if (event.target instanceof HTMLInputElement) {
-      this.search.set(event.target.value);
-    }
-  }
-
-  // Reads a checkbox change without assuming every event comes from an input.
-  protected checkedOf(event: Event): boolean {
-    return event.target instanceof HTMLInputElement && event.target.checked;
-  }
-
-  // Switches the file pane between the grid and the list.
-  protected setView(value: 'grid' | 'list'): void {
-    this.view.set(value);
-  }
-
   // Opens a folder in the right pane by updating the query string.
   protected openFolder(path: string): void {
     void this.router.navigate([], {
@@ -207,34 +158,14 @@ export class Files {
     this.selectedFolders.set([]);
   }
 
-  // Remembers where the pointer went down so a drag that starts on a control can be ignored.
-  protected rememberDragOrigin(event: Event): void {
-    this.dragOrigin = event.target;
-  }
-
-  // Starts a file drag unless it began on a checkbox or menu, which should keep working as controls.
-  protected onFileDragStart(event: DragEvent, id: string): void {
-    const origin = this.dragOrigin;
-    this.dragOrigin = null;
-    if (origin instanceof Element && origin.closest('input, label, .dropdown') !== null) {
-      event.preventDefault();
-      return;
-    }
-    const transfer = event.dataTransfer;
-    if (transfer === null) {
-      event.preventDefault();
-      return;
-    }
-    transfer.setData(fileDragType, id);
-    transfer.setData('text/plain', id);
-    transfer.effectAllowed = 'move';
+  // Remembers the file the pane started dragging so a drop can still find it.
+  protected onDragStarted(id: string): void {
     this.draggingId = id;
   }
 
   // Clears the drag highlight when the pointer is released.
-  protected onFileDragEnd(): void {
+  protected onDragEnded(): void {
     this.draggingId = '';
-    this.dragOrigin = null;
     this.dropTarget.set(null);
   }
 
@@ -319,14 +250,10 @@ export class Files {
     this.runtime.settle(program);
   }
 
-  // Runs the current-folder action the icon row reported. Upload and delete stay on this page.
+  // Runs the current-folder action the icon row reported. Upload stays inside the file pane.
   protected onFolderAction(id: FolderActionId): void {
     if (id === 'delete') {
       this.deleteChosen();
-      return;
-    }
-    if (id === 'upload') {
-      this.pickFiles();
       return;
     }
     this.createFolder();
@@ -334,11 +261,53 @@ export class Files {
 
   // Asks for a folder name inside the current folder.
   protected createFolder(): void {
+    this.pendingRename.set(undefined);
     this.folderPrompt().open();
   }
 
-  // Creates the named folder under the one currently open.
+  // Runs the icon action from the file pane.
+  protected onFileAction(file: FileEntry, action: FileRowAction): void {
+    if (action === 'download') {
+      this.downloadFile(file);
+      return;
+    }
+    if (action === 'delete') {
+      this.deleteFile(file);
+      return;
+    }
+    this.renameFile(file);
+  }
+
+  // Asks the browser to save the file. The content route streams the bytes to disk.
+  protected downloadFile(file: FileEntry): void {
+    const anchor = document.createElement('a');
+    anchor.href = `${this.contentUrl(file.id)}?download=1`;
+    anchor.download = file.name;
+    document.body.append(anchor);
+    anchor.click();
+    anchor.remove();
+  }
+
+  // Confirms deletion of one file, without using the current multi-selection.
+  protected deleteFile(file: FileEntry): void {
+    this.pendingDelete.set({ kind: 'files', ids: [file.id] });
+    this.confirm().open('Delete file', `Delete ${file.name}?`);
+  }
+
+  // Asks for a new display name. The server keeps the stored extension.
+  protected renameFile(file: FileEntry): void {
+    this.pendingRename.set(file);
+    this.folderPrompt().open(file.name, 'Rename', 'Rename');
+  }
+
+  // Creates the named folder under the one currently open, or renames the pending file.
   protected onFolderNamed(name: string): void {
+    const renaming = this.pendingRename();
+    if (renaming !== undefined) {
+      this.pendingRename.set(undefined);
+      this.applyRename(renaming, name);
+      return;
+    }
     const api = this.api;
     const source = this.workspace.source();
     const folder = this.folder();
@@ -349,6 +318,24 @@ export class Files {
       yield* api.createFolder(source, path);
       yield* Effect.sync(() => refresh());
     }).pipe(
+      Effect.catch((error) => Effect.sync(() => notices.show(error.message))),
+      Effect.asVoid,
+    );
+    this.runtime.settle(program);
+  }
+
+  // Sends the requested name. The server keeps the original extension and content type.
+  private applyRename(file: FileEntry, name: string): void {
+    const api = this.api;
+    const notices = this.notices;
+    const refresh = () => this.refresh$.next();
+    const program = api.rename(file.id, name).pipe(
+      Effect.tap((entry) =>
+        Effect.sync(() => {
+          notices.show(`Renamed to ${entry.name}`);
+          refresh();
+        }),
+      ),
       Effect.catch((error) => Effect.sync(() => notices.show(error.message))),
       Effect.asVoid,
     );
@@ -376,7 +363,7 @@ export class Files {
     if (ids.length === 0) {
       return;
     }
-    this.pendingDelete.set({ kind: 'files' });
+    this.pendingDelete.set({ kind: 'files', ids });
     this.confirm().open('Delete files', `Delete the ${ids.length} selected files?`);
   }
 
@@ -398,19 +385,8 @@ export class Files {
     this.confirm().open('Delete selected', `Delete the selected ${parts.join(' and ')}?`);
   }
 
-  // Opens the hidden file input so the user can upload into the current folder.
-  protected pickFiles(): void {
-    this.fileInput().nativeElement.click();
-  }
-
-  // Uploads the files chosen from the picker and clears the input.
-  protected onUpload(event: Event): void {
-    const input = event.target;
-    if (!(input instanceof HTMLInputElement) || input.files === null) {
-      return;
-    }
-    const files = [...input.files];
-    input.value = '';
+  // Uploads the files chosen from the file pane into the current folder.
+  protected uploadFiles(files: ReadonlyArray<File>): void {
     this.uploadIntoFolder(files);
   }
 
@@ -428,7 +404,7 @@ export class Files {
       this.removeSelection(pending.ids, pending.paths);
       return;
     }
-    const ids = this.selected();
+    const ids = pending.ids;
     const api = this.api;
     const notices = this.notices;
     const refresh = () => this.refresh$.next();
@@ -443,11 +419,6 @@ export class Files {
       Effect.asVoid,
     );
     this.runtime.settle(program);
-  }
-
-  // Returns the content URL used by image and media previews.
-  protected contentUrl(id: string): string {
-    return this.api.contentUrl(id);
   }
 
   // Deletes the chosen files and empty folders, and still refreshes if one of the calls fails.

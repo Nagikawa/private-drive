@@ -1,16 +1,13 @@
 import { Component, input, output } from '@angular/core';
 import { ScrollingModule } from '@angular/cdk/scrolling';
-import { formatBytes as formatByteCount, pure, type FileEntry, type LinkFormat } from '@private-drive/domain';
+import { formatBytes as formatByteCount, pure, type FileEntry } from '@private-drive/domain';
 
 export interface FileTableToggle {
   readonly id: string;
   readonly checked: boolean;
 }
 
-export interface FileTableCopy {
-  readonly file: FileEntry;
-  readonly format: LinkFormat;
-}
+export type FileRowAction = 'download' | 'delete' | 'rename';
 
 export interface FileTableDrag {
   readonly event: DragEvent;
@@ -47,7 +44,7 @@ export class FileTable {
   readonly selected = input<ReadonlyArray<string>>([]);
   readonly toggled = output<FileTableToggle>();
   readonly previewed = output<FileEntry>();
-  readonly copied = output<FileTableCopy>();
+  readonly acted = output<{ file: FileEntry; action: FileRowAction }>();
   readonly pressed = output<Event>();
   readonly dragStarted = output<FileTableDrag>();
   readonly dragEnded = output<void>();
@@ -78,9 +75,9 @@ export class FileTable {
     this.previewed.emit(file);
   }
 
-  // Asks the files page to copy one share-link format.
-  protected copy(file: FileEntry, format: LinkFormat): void {
-    this.copied.emit({ file, format });
+  // Asks the files page to download, delete, or rename this row.
+  protected act(file: FileEntry, action: FileRowAction): void {
+    this.acted.emit({ file, action });
   }
 
   // Forwards the pointer down so the files page can ignore drags that start on a control.
