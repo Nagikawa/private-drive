@@ -222,7 +222,8 @@ export class Drive extends Context.Service<Drive, {
         const stamp = yield* createdAt()
         const data = yield* catalog.modify((incoming) => {
           let current = incoming
-          if (input.source === "telegram" || remote.truncated) {
+          // Telegram has no history listing, so the local index stays the only record.
+          if (input.source === "telegram") {
             return [current, current] as const
           }
           const remoteKeys = new Set(remote.files.map((file) => file.key))
@@ -244,11 +245,13 @@ export class Drive extends Context.Service<Drive, {
               }))
             }
           }
-          // Drops index rows in this listing that the remote store no longer has, and keeps everything outside it.
+          // A capped page must not delete rows it never saw. A complete page drops rows the store no longer has.
           const inScope = (entry: StoredFile) =>
             entry.source === input.source &&
             (input.recursive ? pure(isWithinFolder(folder, entry.folder), false) : entry.folder === folder)
-          const entries = current.entries.filter((entry) => !inScope(entry) || remoteKeys.has(entry.storageKey))
+          const entries = remote.truncated
+            ? current.entries
+            : current.entries.filter((entry) => !inScope(entry) || remoteKeys.has(entry.storageKey))
           let folders = current.folders
           for (const path of remote.folders) {
             folders = rememberFolder(folders, input.source, path)
