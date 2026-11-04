@@ -10,6 +10,18 @@ export interface TelegramStored {
   readonly storageKey: string
 }
 
+const FileInfo = Schema.Struct({
+  description: Schema.optional(Schema.String),
+  ok: Schema.Boolean,
+  result: Schema.optional(Schema.Struct({ file_path: Schema.optional(Schema.String) })),
+})
+
+// Cloud getFile refuses documents above about 20 MB with "file is too big".
+const lookupError = (description: string | undefined): StorageError =>
+  description !== undefined && description.toLowerCase().includes("file is too big")
+    ? new StorageError({ message: "Telegram cloud downloads stop at 20 MB, so this file cannot be opened" })
+    : new StorageError({ message: "Telegram file not found" })
+
 export class Telegram extends Context.Service<Telegram, {
   readonly configured: boolean
   deleteMessage(messageId: number): Effect.Effect<void, StorageError>
@@ -76,8 +88,8 @@ export class Telegram extends Context.Service<Telegram, {
         }
       })
 
-      // Opens a bot file as a byte stream so a download does not hold the whole file in memory.
-      const open = Effect.fn("Telegram.open")(function*(fileId: string) {
+      // Resolves a file id. A 400 from getFile still has a description, so an oversized file is not reported as missing.
+      const resolvePath = Effect.fn("Telegram.resolvePath")(function*(fileId: string) {
         if (config.telegram === undefined) {
           return yield* unavailable("telegram")
         }
@@ -85,17 +97,24 @@ export class Telegram extends Context.Service<Telegram, {
         const info = yield* HttpClientRequest.get(
           `https://api.telegram.org/bot${token}/getFile?file_id=${encodeURIComponent(fileId)}`,
         ).pipe(
-          http.execute,
-          Effect.flatMap(HttpClientResponse.schemaBodyJson(Schema.Struct({
-            ok: Schema.Boolean,
-            result: Schema.optional(Schema.Struct({ file_path: Schema.optional(Schema.String) })),
-          }))),
+          raw.execute,
+          Effect.flatMap(HttpClientResponse.schemaBodyJson(FileInfo)),
           Effect.mapError(() => new StorageError({ message: "Telegram file lookup failed" })),
         )
-        const filePath = info.result?.file_path
-        if (!info.ok || filePath === undefined) {
-          return yield* new StorageError({ message: "Telegram file not found" })
+        const path = info.result?.file_path
+        if (!info.ok || path === undefined) {
+          return yield* lookupError(info.description)
         }
+        return path
+      })
+
+      // Opens a bot file as a byte stream so a download does not hold the whole file in memory.
+      const open = Effect.fn("Telegram.open")(function*(fileId: string) {
+        if (config.telegram === undefined) {
+          return yield* unavailable("telegram")
+        }
+        const token = Redacted.value(config.telegram.token)
+        const filePath = yield* resolvePath(fileId)
         const response = yield* HttpClientRequest.get(
           `https://api.telegram.org/file/bot${token}/${filePath}`,
         ).pipe(
@@ -113,20 +132,7 @@ export class Telegram extends Context.Service<Telegram, {
           return yield* unavailable("telegram")
         }
         const token = Redacted.value(config.telegram.token)
-        const info = yield* HttpClientRequest.get(
-          `https://api.telegram.org/bot${token}/getFile?file_id=${encodeURIComponent(fileId)}`,
-        ).pipe(
-          http.execute,
-          Effect.flatMap(HttpClientResponse.schemaBodyJson(Schema.Struct({
-            ok: Schema.Boolean,
-            result: Schema.optional(Schema.Struct({ file_path: Schema.optional(Schema.String) })),
-          }))),
-          Effect.mapError(() => new StorageError({ message: "Telegram file lookup failed" })),
-        )
-        const filePath = info.result?.file_path
-        if (!info.ok || filePath === undefined) {
-          return yield* new StorageError({ message: "Telegram file not found" })
-        }
+        const filePath = yield* resolvePath(fileId)
         const response = yield* HttpClientRequest.get(
           `https://api.telegram.org/file/bot${token}/${filePath}`,
         ).pipe(
