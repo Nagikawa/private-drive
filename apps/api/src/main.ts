@@ -4,6 +4,7 @@ import { Effect, Layer } from "effect"
 import { FetchHttpClient, HttpRouter } from "effect/http"
 import { HttpApiBuilder } from "effect/http-api"
 import { Api } from "@private-drive/domain"
+import { AuditLog } from "./audit/log.ts"
 import { SessionHandlers } from "./auth/handlers.ts"
 import { SessionLedger } from "./auth/ledger.ts"
 import { SessionLive } from "./auth/session.ts"
@@ -34,6 +35,7 @@ const Server = Layer.unwrap(
       Layer.provide(Drive.layer),
       Layer.provide(SessionLive),
       Layer.provide(SessionLedger.layer),
+      Layer.provide(AuditLog.layer),
       Layer.provide(AppConfig.layer),
       Layer.provide(FetchHttpClient.layer),
       Layer.provide(NodeFileSystem.layer),

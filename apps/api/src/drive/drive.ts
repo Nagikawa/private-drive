@@ -23,6 +23,7 @@ import {
   uniqueName,
   type SourceId,
 } from "@private-drive/domain"
+import { AuditLog } from "../audit/log.ts"
 import { Catalog } from "../index/catalog.ts"
 import { StoredFile } from "../index/schema.ts"
 import { addEntry, createdAt, rememberFolder, rememberFolderTree, replaceCatalog } from "../index/update.ts"
@@ -92,6 +93,7 @@ export class Drive extends Context.Service<Drive, {
   static readonly layer = Layer.effect(
     Drive,
     Effect.gen(function*() {
+      const audit = yield* AuditLog
       const catalog = yield* Catalog
       const fs = yield* FileSystem.FileSystem
       const r2 = yield* R2
@@ -218,6 +220,7 @@ export class Drive extends Context.Service<Drive, {
             return rollback.pipe(Effect.catch(() => Effect.void))
           }),
         )
+        yield* audit.record("upload", `${input.source} ${folder}/${name}`)
         return yield* toEntry(record)
       })
 
@@ -339,6 +342,7 @@ export class Drive extends Context.Service<Drive, {
             replaceCatalog(data, data.entries, rememberFolderTree(data.folders, source, folder)),
             undefined,
           ] as const)
+          yield* audit.record("create-folder", `${source} ${folder}`)
           return new FolderEntry({ name: yield* folderName(folder), path: folder })
         }),
         // Removes an empty folder and its marker, and refuses Root so the drive always has a home.
@@ -374,6 +378,7 @@ export class Drive extends Context.Service<Drive, {
             ),
             undefined,
           ] as const)
+          yield* audit.record("delete-folder", `${source} ${folder}`)
         }),
         list,
         // Opens one file as a byte stream for the content route after the id is found in the index.
@@ -408,6 +413,7 @@ export class Drive extends Context.Service<Drive, {
             ] as const)
             removed += 1
           }
+          yield* audit.record("delete", String(removed))
           return new DeleteResult({ removed })
         }),
         // Moves files inside one source, copying remote objects when the storage key has to change.
@@ -477,6 +483,7 @@ export class Drive extends Context.Service<Drive, {
             })
             moved += 1
           }
+          yield* audit.record("move", `${moved} -> ${destination}`)
           return new MoveResult({ moved })
         }),
         // Renames one file while keeping its stored extension and content type.
@@ -530,6 +537,7 @@ export class Drive extends Context.Service<Drive, {
             ),
             undefined,
           ] as const)
+          yield* audit.record("rename", `${entry.name} -> ${name}`)
           return yield* toEntry(renamed)
         }),
         // Probes each configured store so the shell can hide sources that are not set up.
