@@ -14,6 +14,8 @@ export { failureMessage, parseJson } from "./utils/json.ts"
 export { absoluteContentUrl, contentPath, escapeHtml, formatLink, type LinkFormat } from "./utils/links.ts"
 export {
   Account,
+  CompleteUpload,
+  OpenUpload,
   CurrentAccount,
   DeletePayload,
   DeleteResult,
@@ -32,6 +34,7 @@ export {
   SourceStatus,
   StorageError,
   Unauthorized,
+  UploadProgress,
   UrlUploadPayload,
 } from "./model.ts"
 export { connectedResource } from "./policy/resource.ts"
@@ -47,7 +50,7 @@ export {
   storageKey,
 } from "./utils/paths.ts"
 export { pure } from "./utils/pure.ts"
-export { uploadPartBytes, uploadParts, type UploadPart } from "./utils/upload-parts.ts"
+export { uploadChunkBytes, uploadPartBytes, uploadParts, type UploadPart } from "./utils/upload-parts.ts"
 export { Session, SessionCookie } from "./session.ts"
 export { listOrders, listPageSize, listSorts, pageFiles, type ListOrder, type ListPage, type ListRow, type ListSort } from "./utils/list-page.ts"
 export { folderCrumbs, folderTree, type FolderCrumb, type FolderNode } from "./utils/tree.ts"

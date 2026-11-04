@@ -7,7 +7,9 @@ import {
   FileEntry,
   FolderEntry,
   FolderPayload,
+  CompleteUpload,
   Listing,
+  OpenUpload,
   LoginPayload,
   MovePayload,
   MoveResult,
@@ -18,6 +20,7 @@ import {
   SourceStatus,
   StorageError,
   Unauthorized,
+  UploadProgress,
   UrlUploadPayload,
   contentPath,
   failureMessage,
@@ -137,6 +140,66 @@ export class DriveApi {
   // Stores a file fetched from a public URL.
   uploadUrl(source: SourceId, folder: string, url: string): Effect.Effect<FileEntry, DriveFailure, DriveServices> {
     return call((client) => client.files.uploadUrl({ payload: UrlUploadPayload.make({ source, folder, url }) }));
+  }
+
+  // Opens a resumable upload, returning one that already has some bytes when the file matches.
+  openUpload(input: {
+    contentType: string;
+    folder: string;
+    name: string;
+    size: number;
+    source: SourceId;
+  }): Effect.Effect<UploadProgress, DriveFailure, DriveServices> {
+    return call((client) => client.files.openUpload({ payload: OpenUpload.make(input) }));
+  }
+
+  // Lists unfinished uploads in one folder.
+  uploadSessions(
+    source: SourceId,
+    folder: string,
+  ): Effect.Effect<ReadonlyArray<UploadProgress>, DriveFailure, DriveServices> {
+    return call((client) => client.files.uploadSessions({ query: { source, folder } }));
+  }
+
+  // Writes one slice. A 409 returns the offset the server already has.
+  sendChunk(
+    id: string,
+    start: number,
+    end: number,
+    total: number,
+    bytes: Uint8Array,
+  ): Effect.Effect<number, DriveFailure> {
+    return Effect.tryPromise({
+      try: async () => {
+        const copy = new ArrayBuffer(bytes.byteLength);
+        new Uint8Array(copy).set(bytes);
+        const response = await fetch(`/api/uploads/sessions/${encodeURIComponent(id)}`, {
+          body: copy,
+          credentials: 'include',
+          headers: { 'content-range': `bytes ${start}-${end}/${total}` },
+          method: 'PUT',
+        });
+        const text = await response.text();
+        const parsed: unknown = text === '' ? {} : JSON.parse(text);
+        const offset = typeof parsed === 'object' && parsed !== null && 'offset' in parsed &&
+            typeof parsed.offset === 'number'
+          ? parsed.offset
+          : undefined;
+        if (response.status === 409 && offset !== undefined) {
+          return offset;
+        }
+        if (!response.ok || offset === undefined) {
+          throw new Error('Upload chunk failed');
+        }
+        return offset;
+      },
+      catch: () => new NetworkFailure({ message: 'Could not upload the next part' }),
+    });
+  }
+
+  // Stores a finished resumable upload.
+  completeUpload(id: string): Effect.Effect<FileEntry, DriveFailure, DriveServices> {
+    return call((client) => client.files.completeUpload({ payload: CompleteUpload.make({ id }) }));
   }
 
   // Posts the browser file as multipart through the same typed client as the JSON routes.

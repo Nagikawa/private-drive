@@ -97,3 +97,22 @@ export class SharePayload extends Schema.Class<SharePayload>("private-drive/Shar
 export class ShareLink extends Schema.Class<ShareLink>("private-drive/ShareLink")({
   url: Schema.String,
 }) {}
+
+export class OpenUpload extends Schema.Class<OpenUpload>("private-drive/OpenUpload")({
+  contentType: Schema.String,
+  folder: Schema.String,
+  name: Schema.String,
+  size: Schema.Int,
+  source: SourceId,
+}) {}
+
+export class UploadProgress extends Schema.Class<UploadProgress>("private-drive/UploadProgress")({
+  id: Schema.String,
+  name: Schema.String,
+  offset: Schema.Int,
+  size: Schema.Int,
+}) {}
+
+export class CompleteUpload extends Schema.Class<CompleteUpload>("private-drive/CompleteUpload")({
+  id: Schema.String,
+}) {}

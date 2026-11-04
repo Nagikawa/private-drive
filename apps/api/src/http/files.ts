@@ -2,6 +2,7 @@ import { ByteSize, Effect, FileSystem, Option } from "effect"
 import { HttpApiBuilder } from "effect/http-api"
 import { Api, StorageError, contentTypeFromName, type SourceId } from "@private-drive/domain"
 import { Drive } from "../drive/drive.ts"
+import { Uploads } from "../drive/uploads.ts"
 
 interface UploadBody {
   readonly file: { readonly contentType: string; readonly name: string; readonly path: string }
@@ -14,6 +15,7 @@ export const FilesHandlers = HttpApiBuilder.group(
   "files",
   Effect.fn("FilesHandlers")(function*(handlers) {
     const drive = yield* Drive
+    const uploads = yield* Uploads
     const fs = yield* FileSystem.FileSystem
 
     // Stats the temporary multipart file and passes its path through, so a large body is streamed from disk.
@@ -61,6 +63,12 @@ export const FilesHandlers = HttpApiBuilder.group(
       rename: ({ payload }) => drive.rename(payload.id, payload.name),
       // Signs a short-lived content URL for a file that is already in the index.
       share: ({ payload }) => drive.share(payload.id),
+      // Starts a resumable upload, or returns the one already stored for this file.
+      openUpload: ({ payload }) => uploads.open(payload),
+      // Lists uploads in this folder that have not been finished.
+      uploadSessions: ({ query }) => uploads.list(query.source, query.folder ?? ""),
+      // Moves a finished temporary file into the drive.
+      completeUpload: ({ payload }) => uploads.complete(payload.id),
       // Deletes the selected file ids from their stores and the index.
       remove: ({ payload }) => drive.remove(payload.ids),
       // Reports which storage providers are configured and reachable.

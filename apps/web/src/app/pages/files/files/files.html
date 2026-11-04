@@ -24,7 +24,7 @@
       [selected]="selected()"
       [deleteDisabled]="!hasSelection()"
       [uploading]="uploading()"
-      [uploadStatus]="uploadStatus()"
+      [uploadStatus]="statusLine()"
       [contentUrl]="contentUrl"
       (searched)="search.set($event)"
       (sorted)="setSort($event)"

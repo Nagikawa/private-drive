@@ -8,12 +8,14 @@ import {
   formatLink,
   joinFolder,
   pure,
+  uploadChunkBytes,
   type FileEntry,
+  type UploadProgress,
   type FolderEntry,
   type Listing,
 } from '@private-drive/domain';
 import { EMPTY, Subject, combineLatest, debounceTime, distinctUntilChanged, map, of, startWith, switchMap } from 'rxjs';
-import { ClipboardFailure } from '../../../core/drive-error';
+import { ClipboardFailure, NetworkFailure } from '../../../core/drive-error';
 import { DriveApi } from '../../../services/drive-api/drive-api.service';
 import { DriveRuntime } from '../../../services/drive-runtime/drive-runtime.service';
 import { Notices } from '../../../services/notices/notices.service';
@@ -228,6 +230,38 @@ export class Files {
   }
 
   // True when a file or folder checkbox is on, so the action icons know there is something to act on.
+  // An upload that stopped before the last byte. Choosing the same file continues it.
+  protected readonly paused = toSignal(
+    combineLatest([
+      toObservable(this.workspace.source),
+      toObservable(this.folder),
+      this.refresh$.pipe(startWith(undefined)),
+    ]).pipe(
+      switchMap(([source, folder]) =>
+        this.runtime.bind(
+          this.api.uploadSessions(source, folder).pipe(
+            Effect.map((sessions) => sessions.find((item) => item.offset < item.size)),
+            Effect.catch(() => Effect.succeed(undefined)),
+          ),
+        ),
+      ),
+    ),
+    { initialValue: undefined as UploadProgress | undefined },
+  );
+
+  // Shows the active chunk, or the paused upload once the request has stopped.
+  protected readonly statusLine = computed(() => {
+    const active = this.uploadStatus();
+    if (active !== '') {
+      return active;
+    }
+    const paused = this.paused();
+    if (paused === undefined) {
+      return '';
+    }
+    return `${paused.name} paused at ${paused.offset} of ${paused.size} bytes. Upload the same file to continue.`;
+  });
+
   protected readonly hasSelection = computed(() => this.selected().length > 0 || this.selectedFolders().length > 0);
 
   // Opens a folder in the right pane by updating the query string.
@@ -570,7 +604,30 @@ export class Files {
       let failed = 0;
       let index = 0;
       for (const file of files) {
-        const uploaded = yield* api.upload(file, source, folder).pipe(
+        const uploaded = yield* Effect.gen(function* () {
+          const session = yield* api.openUpload({
+            contentType: file.type === '' ? 'application/octet-stream' : file.type,
+            folder,
+            name: file.name,
+            size: file.size,
+            source,
+          });
+          let offset = session.offset;
+          while (offset < file.size) {
+            const end = Math.min(offset + uploadChunkBytes, file.size) - 1;
+            const slice = yield* Effect.tryPromise({
+              try: () => file.slice(offset, end + 1).arrayBuffer(),
+              catch: () => new NetworkFailure({ message: 'Could not read the file' }),
+            });
+            const next = yield* api.sendChunk(session.id, offset, end, file.size, new Uint8Array(slice));
+            if (next <= offset) {
+              return yield* new NetworkFailure({ message: 'Could not upload the next part' });
+            }
+            offset = next;
+            setStatus(`${file.name} ${offset} / ${file.size} bytes`);
+          }
+          return yield* api.completeUpload(session.id);
+        }).pipe(
           Effect.match({
             onFailure: (error) => {
               failed += 1;
@@ -586,9 +643,9 @@ export class Files {
       }
       setBusy(false);
       setStatus('');
+      refresh();
       if (failed < files.length) {
         notices.show('Upload complete');
-        refresh();
       }
     }).pipe(Effect.asVoid);
     this.runtime.settle(program);

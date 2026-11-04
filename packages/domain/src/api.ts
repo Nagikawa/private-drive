@@ -3,6 +3,8 @@ import { Multipart } from "effect/http"
 import { Schema } from "effect"
 import {
   Account,
+  CompleteUpload,
+  OpenUpload,
   DeletePayload,
   DeleteResult,
   FileEntry,
@@ -20,6 +22,7 @@ import {
   SourceStatus,
   StorageError,
   Unauthorized,
+  UploadProgress,
   UrlUploadPayload,
 } from "./model.ts"
 import { Session } from "./session.ts"
@@ -103,6 +106,24 @@ export class FilesApi extends HttpApiGroup.make("files")
     HttpApiEndpoint.post("rename", "/files/rename", {
       error: StorageError,
       payload: RenamePayload,
+      success: FileEntry,
+    }),
+    HttpApiEndpoint.post("openUpload", "/uploads/sessions", {
+      error: StorageError,
+      payload: OpenUpload,
+      success: UploadProgress,
+    }),
+    HttpApiEndpoint.get("uploadSessions", "/uploads/sessions", {
+      error: StorageError,
+      query: {
+        folder: Schema.optional(Schema.String),
+        source: SourceId,
+      },
+      success: Schema.Array(UploadProgress),
+    }),
+    HttpApiEndpoint.post("completeUpload", "/uploads/sessions/complete", {
+      error: StorageError,
+      payload: CompleteUpload,
       success: FileEntry,
     }),
     HttpApiEndpoint.post("share", "/files/share", {

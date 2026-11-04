@@ -3,6 +3,9 @@ const minPartBytes = 8 * 1024 * 1024
 const maxPartCount = 10_000
 const mebibyte = 1024 * 1024
 
+// One browser request. The server stores it and the next request continues after it.
+export const uploadChunkBytes = 8 * mebibyte
+
 // Picks a part size that stays within the part count and the minimum part size.
 export const uploadPartBytes = (fileSize: number): number => {
   if (!Number.isFinite(fileSize) || fileSize <= 0) {
