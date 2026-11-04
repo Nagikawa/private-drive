@@ -10,6 +10,7 @@ import { AppConfig } from "./config.ts"
 import { Drive } from "./drive/drive.ts"
 import { ContentRoute } from "./http/content.ts"
 import { FilesHandlers } from "./http/files.ts"
+import { HealthRoute } from "./http/health.ts"
 
 // JSON routes and the raw content route share one drive layer so the index lock is process-wide.
 const Routes = Layer.mergeAll(
@@ -18,6 +19,7 @@ const Routes = Layer.mergeAll(
     Layer.provide(SessionHandlers),
   ),
   ContentRoute,
+  HealthRoute,
 )
 
 // Reads the port, then launches HTTP with auth, the drive, and the platform services underneath.
