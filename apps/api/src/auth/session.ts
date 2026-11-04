@@ -1,7 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto"
 import { DateTime, Effect, Layer, Redacted } from "effect"
 import { Account, CurrentAccount, Session, Unauthorized } from "@private-drive/domain"
-import { AppConfig } from "../config.ts"
 import { SessionLedger } from "./ledger.ts"
 
 // Seven days matches the cookie lifetime, so the token and the browser expire together.
