@@ -1,6 +1,6 @@
 import { Component, ElementRef, afterRenderEffect, computed, effect, inject, viewChild } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
-import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { Router, RouterLink, RouterOutlet } from '@angular/router';
 import { Effect } from 'effect';
 import { connectedResource, pure, type SourceId, type SourceStatus } from '@private-drive/domain';
 import { SessionFailure } from '../../core/drive-error';
@@ -11,7 +11,7 @@ import { Workspace } from '../../services/workspace/workspace.service';
 
 @Component({
   selector: 'app-drive-shell',
-  imports: [RouterLink, RouterLinkActive, RouterOutlet],
+  imports: [RouterLink, RouterOutlet],
   templateUrl: './drive-shell.html',
   host: { class: 'flex h-dvh flex-col' },
 })
