@@ -204,7 +204,19 @@ export class Drive extends Context.Service<Drive, {
         yield* catalog.modify((data) => {
           const folders = folder === "" ? data.folders : rememberFolderTree(data.folders, input.source, folder)
           return [replaceCatalog(data, [...data.entries, record], folders), record] as const
-        })
+        }).pipe(
+          // The object is already stored. Drop it when the index cannot record it, so the bucket does not keep an orphan.
+          Effect.tapError(() => {
+            const rollback = input.source === "r2"
+              ? r2.delete(key)
+              : input.source === "huggingface"
+              ? huggingface.delete(key)
+              : telegramMessageId === undefined
+              ? Effect.void
+              : telegram.deleteMessage(telegramMessageId)
+            return rollback.pipe(Effect.catch(() => Effect.void))
+          }),
+        )
         return yield* toEntry(record)
       })
 
