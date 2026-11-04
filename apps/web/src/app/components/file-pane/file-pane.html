@@ -138,6 +138,7 @@
               </div>
               <ul tabindex="0" class="dropdown-content menu bg-base-100 rounded-box z-1 w-40 p-2 shadow-sm" (contextmenu)="$event.preventDefault()">
                 <li><button type="button" (click)="act(file, 'download')">Download</button></li>
+                <li><button type="button" (click)="act(file, 'share')">Copy link</button></li>
                 <li><button type="button" (click)="act(file, 'delete')">Delete</button></li>
                 <li><button type="button" (click)="act(file, 'rename')">Rename</button></li>
               </ul>

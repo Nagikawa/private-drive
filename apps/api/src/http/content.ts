@@ -1,20 +1,31 @@
-import { DateTime, Effect } from "effect"
+import { DateTime, Effect, Redacted } from "effect"
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http"
 import { NotFound, StorageError } from "@private-drive/domain"
 import { SessionLedger } from "../auth/ledger.ts"
+import { contentSignatureValid } from "../auth/share.ts"
+import { AppConfig } from "../config.ts"
 import { Drive } from "../drive/drive.ts"
 
 // Serves file bytes outside the JSON API so the browser can preview images and media with a normal URL.
 const serveContent = Effect.fn("serveContent")(function*() {
   const request = yield* HttpServerRequest.HttpServerRequest
+  const config = yield* AppConfig
   const ledger = yield* SessionLedger
   const params = yield* HttpRouter.params
   const now = DateTime.toEpochMillis(yield* DateTime.now)
-  const accepted = yield* ledger.accept(request.cookies["session"] ?? "", now)
+  const id = params["id"]
+  const query = new URL(request.url, "http://127.0.0.1").searchParams
+  const signed = id !== undefined && contentSignatureValid(
+    Redacted.value(config.sessionSecret),
+    id,
+    query.get("exp") ?? "",
+    query.get("sig") ?? "",
+    now,
+  )
+  const accepted = signed || (yield* ledger.accept(request.cookies["session"] ?? "", now))
   if (!accepted) {
     return HttpServerResponse.text("Log in first", { status: 401 })
   }
-  const id = params["id"]
   if (id === undefined) {
     return HttpServerResponse.text("File not found", { status: 404 })
   }

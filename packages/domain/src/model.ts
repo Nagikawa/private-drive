@@ -89,3 +89,11 @@ export class RenamePayload extends Schema.Class<RenamePayload>("private-drive/Re
   id: Schema.String,
   name: Schema.String,
 }) {}
+
+export class SharePayload extends Schema.Class<SharePayload>("private-drive/SharePayload")({
+  id: Schema.String,
+}) {}
+
+export class ShareLink extends Schema.Class<ShareLink>("private-drive/ShareLink")({
+  url: Schema.String,
+}) {}

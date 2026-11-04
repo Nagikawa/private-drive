@@ -7,7 +7,7 @@ export interface FileTableToggle {
   readonly checked: boolean;
 }
 
-export type FileRowAction = 'download' | 'delete' | 'rename';
+export type FileRowAction = 'download' | 'share' | 'delete' | 'rename';
 
 export interface FileTableDrag {
   readonly event: DragEvent;

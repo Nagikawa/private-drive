@@ -59,6 +59,8 @@ export const FilesHandlers = HttpApiBuilder.group(
       move: ({ payload }) => drive.move(payload.ids, payload.folder),
       // Renames one file and keeps the stored extension even if the request names another type.
       rename: ({ payload }) => drive.rename(payload.id, payload.name),
+      // Signs a short-lived content URL for a file that is already in the index.
+      share: ({ payload }) => drive.share(payload.id),
       // Deletes the selected file ids from their stores and the index.
       remove: ({ payload }) => drive.remove(payload.ids),
       // Reports which storage providers are configured and reachable.

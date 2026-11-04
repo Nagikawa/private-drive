@@ -12,6 +12,8 @@ import {
   MovePayload,
   MoveResult,
   RenamePayload,
+  ShareLink,
+  SharePayload,
   NotFound,
   SourceStatus,
   StorageError,
@@ -125,6 +127,11 @@ export class DriveApi {
   // Renames one file. The server keeps the stored extension.
   rename(id: string, name: string): Effect.Effect<FileEntry, DriveFailure, DriveServices> {
     return call((client) => client.files.rename({ payload: RenamePayload.make({ id, name }) }));
+  }
+
+  // Asks for a one-hour content URL that works without the session cookie.
+  share(id: string): Effect.Effect<ShareLink, DriveFailure, DriveServices> {
+    return call((client) => client.files.share({ payload: SharePayload.make({ id }) }));
   }
 
   // Stores a file fetched from a public URL.

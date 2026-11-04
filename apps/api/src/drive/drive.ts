@@ -1,4 +1,4 @@
-import { Context, Effect, FileSystem, Layer, Stream } from "effect"
+import { Context, Effect, FileSystem, Layer, Redacted, Stream } from "effect"
 import {
   DeleteResult,
   FileEntry,
@@ -6,6 +6,7 @@ import {
   Listing,
   MoveResult,
   NotFound,
+  ShareLink,
   SourceStatus,
   StorageError,
   connectedResource,
@@ -24,6 +25,8 @@ import {
   type SourceId,
 } from "@private-drive/domain"
 import { AuditLog } from "../audit/log.ts"
+import { shareLifetime, signContent } from "../auth/share.ts"
+import { AppConfig } from "../config.ts"
 import { Catalog } from "../index/catalog.ts"
 import { StoredFile } from "../index/schema.ts"
 import { addEntry, createdAt, rememberFolder, rememberFolderTree, replaceCatalog } from "../index/update.ts"
@@ -78,6 +81,7 @@ export class Drive extends Context.Service<Drive, {
   remove(ids: ReadonlyArray<string>): Effect.Effect<DeleteResult, StorageError>
   move(ids: ReadonlyArray<string>, folder: string): Effect.Effect<MoveResult, StorageError>
   rename(id: string, name: string): Effect.Effect<FileEntry, StorageError>
+  share(id: string): Effect.Effect<ShareLink, NotFound | StorageError>
   sources(): Effect.Effect<ReadonlyArray<SourceStatus>>
   upload(input: {
     readonly contentType: string
@@ -94,7 +98,9 @@ export class Drive extends Context.Service<Drive, {
     Drive,
     Effect.gen(function*() {
       const audit = yield* AuditLog
+      const config = yield* AppConfig
       const catalog = yield* Catalog
+      const secret = Redacted.value(config.sessionSecret)
       const fs = yield* FileSystem.FileSystem
       const r2 = yield* R2
       const telegram = yield* Telegram
@@ -539,6 +545,20 @@ export class Drive extends Context.Service<Drive, {
           ] as const)
           yield* audit.record("rename", `${entry.name} -> ${name}`)
           return yield* toEntry(renamed)
+        }),
+        // Signs a one-hour content URL that works without the session cookie.
+        share: Effect.fn("Drive.share")(function*(id: string) {
+          const current = yield* catalog.read
+          const entry = current.entries.find((item) => item.id === id)
+          if (entry === undefined) {
+            return yield* new NotFound({ message: "File not found" })
+          }
+          const expiresAt = Date.now() + shareLifetime
+          const signature = signContent(secret, id, expiresAt)
+          yield* audit.record("share", entry.name)
+          return new ShareLink({
+            url: `/api/files/${encodeURIComponent(id)}/content?exp=${expiresAt}&sig=${encodeURIComponent(signature)}`,
+          })
         }),
         // Probes each configured store so the shell can hide sources that are not set up.
         sources: Effect.fn("Drive.sources")(function*() {

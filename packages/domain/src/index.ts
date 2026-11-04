@@ -25,6 +25,8 @@ export {
   MovePayload,
   MoveResult,
   RenamePayload,
+  ShareLink,
+  SharePayload,
   NotFound,
   SourceId,
   SourceStatus,

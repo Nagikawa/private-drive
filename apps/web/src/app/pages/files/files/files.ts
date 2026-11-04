@@ -3,7 +3,6 @@ import { toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router } from '@angular/router';
 import { Effect } from 'effect';
 import {
-  absoluteContentUrl,
   folderCrumbs,
   folderTree,
   formatLink,
@@ -11,7 +10,6 @@ import {
   pure,
   type FileEntry,
   type FolderEntry,
-  type LinkFormat,
   type Listing,
 } from '@private-drive/domain';
 import { EMPTY, Subject, combineLatest, debounceTime, distinctUntilChanged, map, of, startWith, switchMap } from 'rxjs';
@@ -327,11 +325,13 @@ export class Files {
   }
 
   // Copies a share link and closes the menu so the notice is visible.
-  protected copy(entry: FileEntry, format: LinkFormat): void {
+  protected copy(entry: FileEntry): void {
+    const api = this.api;
     const notices = this.notices;
     const program = Effect.gen(function* () {
-      const url = yield* absoluteContentUrl(location.origin, entry.id);
-      const text = yield* formatLink({ format, image: entry.image, name: entry.name, url });
+      const link = yield* api.share(entry.id);
+      const url = link.url.startsWith('http') ? link.url : `${location.origin}${link.url}`;
+      const text = yield* formatLink({ format: 'url', image: entry.image, name: entry.name, url });
       yield* Effect.tryPromise({
         try: () => navigator.clipboard.writeText(text),
         catch: () => new ClipboardFailure({ message: 'Could not copy' }),
@@ -368,6 +368,10 @@ export class Files {
   protected onFileAction(file: FileEntry, action: FileRowAction): void {
     if (action === 'download') {
       this.downloadFile(file);
+      return;
+    }
+    if (action === 'share') {
+      this.copy(file);
       return;
     }
     if (action === 'delete') {

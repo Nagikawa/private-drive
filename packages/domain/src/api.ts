@@ -9,6 +9,8 @@ import {
   MovePayload,
   MoveResult,
   RenamePayload,
+  ShareLink,
+  SharePayload,
   FolderEntry,
   FolderPayload,
   Listing,
@@ -102,6 +104,11 @@ export class FilesApi extends HttpApiGroup.make("files")
       error: StorageError,
       payload: RenamePayload,
       success: FileEntry,
+    }),
+    HttpApiEndpoint.post("share", "/files/share", {
+      error: [NotFound, StorageError],
+      payload: SharePayload,
+      success: ShareLink,
     }),
   )
   .middleware(Session)
