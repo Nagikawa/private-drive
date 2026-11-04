@@ -13,14 +13,14 @@
       </label>
     }
   }
-  <div class="ml-auto flex flex-wrap items-center gap-2">
+  <div class="ml-auto flex flex-nowrap items-center gap-2">
     <app-folder-actions
       [deleteDisabled]="deleteDisabled()"
       [uploadDisabled]="uploading()"
       (chosen)="onFolderAction($event)"
     />
     <input #fileInput class="hidden" type="file" multiple aria-hidden="true" tabindex="-1" (change)="onFiles($event)" />
-    <select class="select select-sm" aria-label="Sort" [value]="sort()" (change)="onSort($event)">
+    <select class="select select-sm w-28! shrink-0" aria-label="Sort" [value]="sort()" (change)="onSort($event)">
       <option value="name-asc">Name</option>
       <option value="name-desc">Name, Z to A</option>
       <option value="created-desc">Newest</option>
@@ -30,7 +30,7 @@
       <option value="type-asc">Type</option>
       <option value="type-desc">Type, Z to A</option>
     </select>
-    <div class="join" role="group" aria-label="View">
+    <div class="join shrink-0" role="group" aria-label="View">
       <button
         class="join-item btn btn-sm btn-square transition-none!"
         type="button"
