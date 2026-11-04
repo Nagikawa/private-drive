@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto"
-import { open, readFile, rm } from "node:fs/promises"
+import { copyFile, open, readFile, rm } from "node:fs/promises"
 import { Context, Effect, FileSystem, Layer, Path, Predicate, Result, Schema } from "effect"
 import { StorageError } from "@private-drive/domain"
 import { AppConfig } from "../config.ts"
@@ -112,6 +112,13 @@ export class Catalog extends Context.Service<Catalog, {
       // Writes the index via a temp file so a crash cannot leave a half-written catalog.
       const write = Effect.fn("Catalog.write")(function*(catalog: CatalogData) {
         yield* fs.makeDirectory(path.dirname(indexPath), { recursive: true })
+        const exists = yield* fs.exists(indexPath)
+        if (exists) {
+          yield* Effect.tryPromise({
+            catch: (cause) => cause,
+            try: () => copyFile(indexPath, `${indexPath}.bak`),
+          })
+        }
         const encoded = yield* encodeCatalog(catalog)
         const temporary = `${indexPath}.${randomUUID()}.tmp`
         yield* fs.writeFileString(temporary, encoded)
