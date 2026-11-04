@@ -8,14 +8,12 @@ import {
   formatLink,
   joinFolder,
   pure,
-  uploadChunkBytes,
   type FileEntry,
   type UploadProgress,
   type FolderEntry,
-  type Listing,
 } from '@private-drive/domain';
-import { EMPTY, Subject, combineLatest, debounceTime, distinctUntilChanged, map, of, startWith, switchMap } from 'rxjs';
-import { ClipboardFailure, NetworkFailure } from '../../../core/drive-error';
+import { Subject, combineLatest, map, of, startWith, switchMap } from 'rxjs';
+import { ClipboardFailure } from '../../../core/drive-error';
 import { DriveApi } from '../../../services/drive-api/drive-api.service';
 import { DriveRuntime } from '../../../services/drive-runtime/drive-runtime.service';
 import { Notices } from '../../../services/notices/notices.service';
@@ -28,46 +26,9 @@ import { FilePane, fileDragType } from '../../../components/file-pane/file-pane'
 import { type FileRowAction } from '../../../components/file-table/file-table';
 import { type FolderActionId } from '../../../components/folder-actions/folder-actions';
 import { FolderTree } from '../../../components/folder-tree/folder-tree';
-
-interface BrowseState {
-  listing: Listing | undefined;
-  error: string;
-  page: number;
-  hasPrev: boolean;
-  hasNext: boolean;
-}
-
-type FileSort =
-  | 'name-asc'
-  | 'name-desc'
-  | 'size-asc'
-  | 'size-desc'
-  | 'created-asc'
-  | 'created-desc'
-  | 'type-asc'
-  | 'type-desc';
-
-const fileSorts: ReadonlyArray<FileSort> = [
-  'name-asc',
-  'name-desc',
-  'size-asc',
-  'size-desc',
-  'created-asc',
-  'created-desc',
-  'type-asc',
-  'type-desc',
-];
-
-const parseFileSort = (value: FileSort): { sort: 'name' | 'size' | 'created' | 'type'; order: 'asc' | 'desc' } => {
-  const [sort, order] = value.split('-');
-  if (
-    (sort === 'name' || sort === 'size' || sort === 'created' || sort === 'type') &&
-    (order === 'asc' || order === 'desc')
-  ) {
-    return { sort, order };
-  }
-  return { sort: 'name', order: 'asc' };
-};
+import { emptyBrowse, watchFolderListing } from '../folder-browse';
+import { isFileSort, type FileSort } from '../file-sort';
+import { uploadChunked } from '../upload-chunks';
 
 @Component({
   selector: 'app-files',
@@ -143,77 +104,21 @@ export class Files {
 
   // Loads the files and child folders for the open folder, including the search box above the breadcrumbs.
   protected readonly state = toSignal(
-    combineLatest([
-      toObservable(this.workspace.source),
-      toObservable(this.folder),
-      toObservable(this.search).pipe(debounceTime(250), distinctUntilChanged()),
-      toObservable(this.sort),
-      this.refresh$.pipe(startWith(undefined)),
-    ]).pipe(
-      switchMap(([source, folder, search, sort]) => {
-        const parsed = parseFileSort(sort);
-        const history: Array<string | undefined> = [undefined];
-        let index = 0;
-        return this.turnPage$.pipe(
-          startWith(undefined),
-          switchMap((turn) => {
-            if (turn === 'next') {
-              if (history[index + 1] === undefined) {
-                return EMPTY;
-              }
-              index += 1;
-            } else if (turn === 'prev') {
-              if (index === 0) {
-                return EMPTY;
-              }
-              index -= 1;
-            } else {
-              index = 0;
-            }
-            const cursor = history[index];
-            return this.runtime.bind(
-              this.api.list({
-                source,
-                folder,
-                search,
-                kind: 'all',
-                recursive: 'false',
-                sort: parsed.sort,
-                order: parsed.order,
-                ...(cursor === undefined ? {} : { cursor }),
-              }).pipe(
-                Effect.tap((listing) =>
-                  Effect.sync(() => {
-                    this.selected.set([]);
-                    this.selectedFolders.set([]);
-                    if (listing.next !== undefined) {
-                      history[index + 1] = listing.next;
-                    }
-                  }),
-                ),
-                Effect.map((listing): BrowseState => ({
-                  listing,
-                  error: '',
-                  page: index + 1,
-                  hasPrev: index > 0,
-                  hasNext: listing.next !== undefined,
-                })),
-                Effect.catch((error) =>
-                  Effect.succeed<BrowseState>({
-                    listing: undefined,
-                    error: error.message,
-                    page: index + 1,
-                    hasPrev: false,
-                    hasNext: false,
-                  }),
-                ),
-              ),
-            );
-          }),
-        );
-      }),
-    ),
-    { initialValue: { listing: undefined, error: '', page: 1, hasPrev: false, hasNext: false } satisfies BrowseState },
+    watchFolderListing({
+      bind: (effect) => this.runtime.bind(effect),
+      folder: toObservable(this.folder),
+      load: (query) => this.api.list(query),
+      onLoaded: () => {
+        this.selected.set([]);
+        this.selectedFolders.set([]);
+      },
+      refresh: this.refresh$,
+      search: toObservable(this.search),
+      sort: toObservable(this.sort),
+      source: toObservable(this.workspace.source),
+      turnPage: this.turnPage$,
+    }),
+    { initialValue: emptyBrowse },
   );
 
   // Asks for the previous or next page of the current folder.
@@ -223,9 +128,8 @@ export class Files {
 
   // Changes the server sort and returns to the first page.
   protected setSort(value: string): void {
-    const match = fileSorts.find((item) => item === value);
-    if (match !== undefined) {
-      this.sort.set(match);
+    if (isFileSort(value)) {
+      this.sort.set(value);
     }
   }
 
@@ -586,68 +490,33 @@ export class Files {
     this.runtime.settle(program);
   }
 
-  // Uploads into the open folder and refreshes the list when at least one file succeeds.
+  // Uploads into the open folder and refreshes the list when the queue finishes.
   private uploadIntoFolder(files: ReadonlyArray<File>): void {
     if (files.length === 0) {
       return;
     }
-    const source = this.workspace.source();
-    const folder = this.folder();
-    const api = this.api;
-    const notices = this.notices;
-    const refresh = () => this.refresh$.next();
-    const setBusy = (value: boolean) => this.uploading.set(value);
-    const setStatus = (value: string) => this.uploadStatus.set(value);
-    setBusy(true);
-    setStatus(`Uploading 0 / ${files.length}`);
-    const program = Effect.gen(function* () {
-      let failed = 0;
-      let index = 0;
-      for (const file of files) {
-        const uploaded = yield* Effect.gen(function* () {
-          const session = yield* api.openUpload({
-            contentType: file.type === '' ? 'application/octet-stream' : file.type,
-            folder,
-            name: file.name,
-            size: file.size,
-            source,
-          });
-          let offset = session.offset;
-          while (offset < file.size) {
-            const end = Math.min(offset + uploadChunkBytes, file.size) - 1;
-            const slice = yield* Effect.tryPromise({
-              try: () => file.slice(offset, end + 1).arrayBuffer(),
-              catch: () => new NetworkFailure({ message: 'Could not read the file' }),
-            });
-            const next = yield* api.sendChunk(session.id, offset, end, file.size, new Uint8Array(slice));
-            if (next <= offset) {
-              return yield* new NetworkFailure({ message: 'Could not upload the next part' });
-            }
-            offset = next;
-            setStatus(`${file.name} ${offset} / ${file.size} bytes`);
+    this.uploading.set(true);
+    this.uploadStatus.set(`Uploading 0 / ${files.length}`);
+    const program = uploadChunked({
+      api: this.api,
+      files,
+      folder: this.folder(),
+      onNotice: (message) => this.notices.show(message),
+      onStatus: (message) => this.uploadStatus.set(message),
+      source: this.workspace.source(),
+    }).pipe(
+      Effect.tap((failed) =>
+        Effect.sync(() => {
+          this.uploading.set(false);
+          this.uploadStatus.set('');
+          this.refresh$.next();
+          if (failed < files.length) {
+            this.notices.show('Upload complete');
           }
-          return yield* api.completeUpload(session.id);
-        }).pipe(
-          Effect.match({
-            onFailure: (error) => {
-              failed += 1;
-              notices.show(error.message);
-              return false;
-            },
-            onSuccess: () => true,
-          }),
-        );
-        index += 1;
-        setStatus(`Uploading ${index} / ${files.length}`);
-        void uploaded;
-      }
-      setBusy(false);
-      setStatus('');
-      refresh();
-      if (failed < files.length) {
-        notices.show('Upload complete');
-      }
-    }).pipe(Effect.asVoid);
+        }),
+      ),
+      Effect.asVoid,
+    );
     this.runtime.settle(program);
   }
 }

@@ -19,7 +19,6 @@ import {
   pure,
   nameKeepingType,
   sanitizeFileName,
-  splitStorageKey,
   storageKey,
   uniqueName,
   type SourceId,
@@ -28,12 +27,12 @@ import { AuditLog } from "../audit/log.ts"
 import { shareLifetime, signContent } from "../auth/share.ts"
 import { AppConfig } from "../config.ts"
 import { Catalog } from "../index/catalog.ts"
+import { reconcileRemote } from "./reconcile.ts"
 import { StoredFile } from "../index/schema.ts"
-import { addEntry, createdAt, rememberFolder, rememberFolderTree, replaceCatalog } from "../index/update.ts"
-import { HuggingFace } from "../storage/huggingface.ts"
-import { R2 } from "../storage/r2.ts"
-import { keepName, labels, limits, unavailable, type RemoteListing } from "../storage/shared.ts"
-import { Telegram } from "../storage/telegram.ts"
+import { createdAt, rememberFolderTree, replaceCatalog } from "../index/update.ts"
+import type { FileStore } from "../storage/file-store.ts"
+import { keepName, unavailable } from "../storage/shared.ts"
+import { Stores } from "../storage/stores.ts"
 import { downloadPublic } from "./download.ts"
 
 // Rejects a folder string that could escape the drive root before any provider is called.
@@ -44,19 +43,16 @@ const requireFolder = Effect.fn("Drive.requireFolder")(function*(input: string) 
 })
 
 // Turns a provider probe into a source card, including the unconfigured case the UI hides.
-const sourceStatus = Effect.fn("Drive.sourceStatus")(function*(
-  id: SourceId,
-  check: Effect.Effect<string, StorageError> | undefined,
-) {
-  if (check === undefined) {
-    return new SourceStatus({ connected: false, detail: "Not configured", id, label: labels[id] })
+const sourceStatus = Effect.fn("Drive.sourceStatus")(function*(store: FileStore) {
+  if (!store.configured) {
+    return new SourceStatus({ connected: false, detail: "Not configured", id: store.id, label: store.label })
   }
-  const detail = yield* check.pipe(Effect.catch((error) => Effect.succeed(error.message)))
+  const detail = yield* store.status().pipe(Effect.catch((error) => Effect.succeed(error.message)))
   // A missing resource name is a tagged failure. The source stays disconnected and nothing is thrown.
   const resource = yield* connectedResource(detail).pipe(
     Effect.catchTag("ResourceNameError", () => Effect.succeed(undefined)),
   )
-  return new SourceStatus({ connected: resource !== undefined, detail, id, label: labels[id] })
+  return new SourceStatus({ connected: resource !== undefined, detail, id: store.id, label: store.label })
 })
 
 export class Drive extends Context.Service<Drive, {
@@ -93,7 +89,7 @@ export class Drive extends Context.Service<Drive, {
   }): Effect.Effect<FileEntry, StorageError>
   uploadUrl(source: SourceId, folder: string, url: string): Effect.Effect<FileEntry, StorageError>
 }>()("private-drive/Drive") {
-  // Wires the index and the three stores into the operations the HTTP routes call.
+  // Wires the index and the store registry into the operations the HTTP routes call.
   static readonly layer = Layer.effect(
     Drive,
     Effect.gen(function*() {
@@ -102,9 +98,7 @@ export class Drive extends Context.Service<Drive, {
       const catalog = yield* Catalog
       const secret = Redacted.value(config.sessionSecret)
       const fs = yield* FileSystem.FileSystem
-      const r2 = yield* R2
-      const telegram = yield* Telegram
-      const huggingface = yield* HuggingFace
+      const stores = yield* Stores
 
       // Projects an index row into the HTTP file shape, including whether the browser can preview it as an image.
       const toEntry = Effect.fnUntraced(function*(file: StoredFile) {
@@ -121,42 +115,17 @@ export class Drive extends Context.Service<Drive, {
       })
 
       // Stops a write early when the chosen source has no credentials.
-      const ensureSource = Effect.fn("Drive.ensureSource")(function*(source: SourceId) {
-        const ready = source === "r2"
-          ? r2.configured
-          : source === "telegram"
-          ? telegram.configured
-          : huggingface.configured
-        if (!ready) {
+      const ensureStore = Effect.fn("Drive.ensureStore")(function*(source: SourceId) {
+        const store = stores.get(source)
+        if (!store.configured) {
           return yield* unavailable(source)
         }
+        return store
       })
 
       // Opens a byte stream from the store that owns the index row.
       const openBody = Effect.fn("Drive.openBody")(function*(entry: StoredFile) {
-        if (entry.source === "r2") {
-          return yield* r2.open(entry.storageKey)
-        }
-        if (entry.source === "huggingface") {
-          return yield* huggingface.open(entry.storageKey)
-        }
-        return yield* telegram.open(entry.storageKey)
-      })
-
-      // Asks the listing provider for the folder, and leaves Telegram to the local index.
-      const remoteListing = Effect.fn("Drive.remoteListing")(function*(
-        source: SourceId,
-        folder: string,
-        recursive: boolean,
-      ) {
-        if (source === "r2") {
-          return yield* r2.list(folder, recursive)
-        }
-        if (source === "huggingface") {
-          return yield* huggingface.list(folder, recursive)
-        }
-        const empty: RemoteListing = { files: [], folders: [], truncated: false }
-        return empty
+        return yield* stores.get(entry.source).open(entry.storageKey)
       })
 
       // Stores the temp file, then records it so later lists do not depend on a second remote scan.
@@ -168,15 +137,15 @@ export class Drive extends Context.Service<Drive, {
         readonly size: number
         readonly source: SourceId
       }) {
-        yield* ensureSource(input.source)
+        const store = yield* ensureStore(input.source)
         const folder = yield* requireFolder(input.folder)
         const safeName = yield* sanitizeFileName(input.name).pipe(
           Effect.mapError(() => new StorageError({ message: "Invalid file name" })),
         )
-        const limit = limits[input.source]
+        const limit = store.byteLimit
         if (limit !== undefined && input.size > limit) {
           return yield* new StorageError({
-            message: `${labels[input.source]} file size limit is ${Math.floor(limit / (1024 * 1024))} MB`,
+            message: `${store.label} file size limit is ${Math.floor(limit / (1024 * 1024))} MB`,
           })
         }
         const current = yield* catalog.read
@@ -187,17 +156,7 @@ export class Drive extends Context.Service<Drive, {
         )
         const name = yield* uniqueName(safeName, used)
         const key = yield* storageKey(folder, name)
-        let storageKeyValue = key
-        let telegramMessageId: number | undefined
-        if (input.source === "telegram") {
-          const stored = yield* telegram.put(key, input.path, input.contentType)
-          storageKeyValue = stored.storageKey
-          telegramMessageId = stored.messageId
-        } else if (input.source === "huggingface") {
-          yield* huggingface.putFile(key, input.path, input.size)
-        } else {
-          yield* r2.putFile(key, input.path, input.size, input.contentType)
-        }
+        const placed = yield* store.putFile(key, input.path, input.size, input.contentType)
         const stamp = yield* createdAt()
         const record = new StoredFile({
           contentType: input.contentType,
@@ -207,24 +166,17 @@ export class Drive extends Context.Service<Drive, {
           name,
           size: input.size,
           source: input.source,
-          storageKey: storageKeyValue,
-          ...(telegramMessageId === undefined ? {} : { telegramMessageId: Math.trunc(telegramMessageId) }),
+          storageKey: placed.storageKey,
+          ...(placed.telegramMessageId === undefined ? {} : { telegramMessageId: placed.telegramMessageId }),
         })
         yield* catalog.modify((data) => {
           const folders = folder === "" ? data.folders : rememberFolderTree(data.folders, input.source, folder)
           return [replaceCatalog(data, [...data.entries, record], folders), record] as const
         }).pipe(
           // The object is already stored. Drop it when the index cannot record it, so the bucket does not keep an orphan.
-          Effect.tapError(() => {
-            const rollback = input.source === "r2"
-              ? r2.delete(key)
-              : input.source === "huggingface"
-              ? huggingface.delete(key)
-              : telegramMessageId === undefined
-              ? Effect.void
-              : telegram.deleteMessage(telegramMessageId)
-            return rollback.pipe(Effect.catch(() => Effect.void))
-          }),
+          Effect.tapError(() =>
+            store.remove(placed.storageKey, placed.telegramMessageId).pipe(Effect.catch(() => Effect.void))
+          ),
         )
         yield* audit.record("upload", `${input.source} ${folder}/${name}`)
         return yield* toEntry(record)
@@ -241,47 +193,22 @@ export class Drive extends Context.Service<Drive, {
         readonly sort: "name" | "size" | "created" | "type"
         readonly source: SourceId
       }) {
-        yield* ensureSource(input.source)
+        const store = yield* ensureStore(input.source)
         const folder = yield* requireFolder(input.folder)
-        const remote = yield* remoteListing(input.source, folder, input.recursive)
+        const remote = store.listsRemotely
+          ? yield* store.list(folder, input.recursive)
+          : { files: [], folders: [], truncated: false }
         const stamp = yield* createdAt()
         const data = yield* catalog.modify((incoming) => {
-          let current = incoming
-          // Telegram has no history listing, so the local index stays the only record.
-          if (input.source === "telegram") {
-            return [current, current] as const
-          }
-          const remoteKeys = new Set(remote.files.map((file) => file.key))
-          for (const file of remote.files) {
-            const parts = pure(splitStorageKey(file.key), { folder: "", name: file.key })
-            if (parts.name === keepName) {
-              continue
-            }
-            if (!current.entries.some((entry) => entry.source === input.source && entry.storageKey === file.key)) {
-              current = addEntry(current, new StoredFile({
-                contentType: file.contentType,
-                createdAt: stamp,
-                folder: parts.folder,
-                id: crypto.randomUUID(),
-                name: parts.name,
-                size: Math.trunc(file.size),
-                source: input.source,
-                storageKey: file.key,
-              }))
-            }
-          }
-          // A capped page must not delete rows it never saw. A complete page drops rows the store no longer has.
-          const inScope = (entry: StoredFile) =>
-            entry.source === input.source &&
-            (input.recursive ? pure(isWithinFolder(folder, entry.folder), false) : entry.folder === folder)
-          const entries = remote.truncated
-            ? current.entries
-            : current.entries.filter((entry) => !inScope(entry) || remoteKeys.has(entry.storageKey))
-          let folders = current.folders
-          for (const path of remote.folders) {
-            folders = rememberFolder(folders, input.source, path)
-          }
-          const next = replaceCatalog(current, entries, folders)
+          const next = reconcileRemote({
+            current: incoming,
+            folder,
+            listsRemotely: store.listsRemotely,
+            recursive: input.recursive,
+            remote,
+            source: input.source,
+            stamp,
+          })
           return [next, next] as const
         })
         const query = input.search.trim().toLowerCase()
@@ -334,16 +261,12 @@ export class Drive extends Context.Service<Drive, {
       return Drive.of({
         // Writes a folder marker and remembers the path so an empty folder still appears in the tree.
         createFolder: Effect.fn("Drive.createFolder")(function*(source, path) {
-          yield* ensureSource(source)
+          const store = yield* ensureStore(source)
           const folder = yield* requireFolder(path)
           if (folder === "") {
             return yield* new StorageError({ message: "Enter a folder name" })
           }
-          if (source === "r2") {
-            yield* r2.put(`${folder}/${keepName}`, new Uint8Array(), "application/octet-stream")
-          } else if (source === "huggingface") {
-            yield* huggingface.put(`${folder}/${keepName}`, new Uint8Array())
-          }
+          yield* store.putMarker(folder)
           yield* catalog.modify((data) => [
             replaceCatalog(data, data.entries, rememberFolderTree(data.folders, source, folder)),
             undefined,
@@ -353,7 +276,7 @@ export class Drive extends Context.Service<Drive, {
         }),
         // Removes an empty folder and its marker, and refuses Root so the drive always has a home.
         deleteFolder: Effect.fn("Drive.deleteFolder")(function*(source, path) {
-          yield* ensureSource(source)
+          const store = yield* ensureStore(source)
           const folder = yield* requireFolder(path)
           if (folder === "") {
             return yield* new StorageError({ message: "Cannot delete Root" })
@@ -371,11 +294,7 @@ export class Drive extends Context.Service<Drive, {
           if (!known) {
             return yield* new NotFound({ message: "Folder not found" })
           }
-          if (source === "r2") {
-            yield* r2.delete(`${folder}/${keepName}`)
-          } else if (source === "huggingface") {
-            yield* huggingface.delete(`${folder}/${keepName}`)
-          }
+          yield* store.deleteMarker(folder)
           yield* catalog.modify((data) => [
             replaceCatalog(
               data,
@@ -406,13 +325,7 @@ export class Drive extends Context.Service<Drive, {
             if (entry === undefined) {
               continue
             }
-            if (entry.source === "r2") {
-              yield* r2.delete(entry.storageKey)
-            } else if (entry.source === "huggingface") {
-              yield* huggingface.delete(entry.storageKey)
-            } else if (entry.telegramMessageId !== undefined && telegram.configured) {
-              yield* telegram.deleteMessage(entry.telegramMessageId)
-            }
+            yield* stores.get(entry.source).remove(entry.storageKey, entry.telegramMessageId)
             yield* catalog.modify((data) => [
               replaceCatalog(data, data.entries.filter((item) => item.id !== id), data.folders),
               undefined,
@@ -459,16 +372,9 @@ export class Drive extends Context.Service<Drive, {
           }
           let moved = 0
           for (const entry of pending) {
-            yield* ensureSource(entry.source)
+            const store = yield* ensureStore(entry.source)
             const nextKey = yield* storageKey(destination, entry.name)
-            if (entry.source === "r2" && entry.storageKey !== nextKey) {
-              yield* r2.copy(entry.storageKey, nextKey)
-              yield* r2.delete(entry.storageKey)
-            } else if (entry.source === "huggingface" && entry.storageKey !== nextKey) {
-              const bytes = yield* huggingface.get(entry.storageKey)
-              yield* huggingface.put(nextKey, bytes)
-              yield* huggingface.delete(entry.storageKey)
-            }
+            const storageKeyValue = yield* store.relocate(entry.storageKey, nextKey)
             const relocated = new StoredFile({
               contentType: entry.contentType,
               createdAt: entry.createdAt,
@@ -477,7 +383,7 @@ export class Drive extends Context.Service<Drive, {
               name: entry.name,
               size: entry.size,
               source: entry.source,
-              storageKey: entry.source === "telegram" ? entry.storageKey : nextKey,
+              storageKey: storageKeyValue,
               ...(entry.telegramMessageId === undefined ? {} : { telegramMessageId: entry.telegramMessageId }),
             })
             yield* catalog.modify((data) => {
@@ -514,16 +420,9 @@ export class Drive extends Context.Service<Drive, {
           if (occupied) {
             return yield* new StorageError({ message: `"${name}" already exists in this folder` })
           }
-          yield* ensureSource(entry.source)
+          const store = yield* ensureStore(entry.source)
           const nextKey = yield* storageKey(entry.folder, name)
-          if (entry.source === "r2" && entry.storageKey !== nextKey) {
-            yield* r2.copy(entry.storageKey, nextKey)
-            yield* r2.delete(entry.storageKey)
-          } else if (entry.source === "huggingface" && entry.storageKey !== nextKey) {
-            const bytes = yield* huggingface.get(entry.storageKey)
-            yield* huggingface.put(nextKey, bytes)
-            yield* huggingface.delete(entry.storageKey)
-          }
+          const storageKeyValue = yield* store.relocate(entry.storageKey, nextKey)
           const renamed = new StoredFile({
             contentType: entry.contentType,
             createdAt: entry.createdAt,
@@ -532,7 +431,7 @@ export class Drive extends Context.Service<Drive, {
             name,
             size: entry.size,
             source: entry.source,
-            storageKey: entry.source === "telegram" ? entry.storageKey : nextKey,
+            storageKey: storageKeyValue,
             ...(entry.telegramMessageId === undefined ? {} : { telegramMessageId: entry.telegramMessageId }),
           })
           yield* catalog.modify((data) => [
@@ -562,18 +461,17 @@ export class Drive extends Context.Service<Drive, {
         }),
         // Probes each configured store so the shell can hide sources that are not set up.
         sources: Effect.fn("Drive.sources")(function*() {
-          const statuses = [
-            yield* sourceStatus("r2", r2.configured ? r2.status() : undefined),
-            yield* sourceStatus("telegram", telegram.configured ? telegram.status() : undefined),
-            yield* sourceStatus("huggingface", huggingface.configured ? huggingface.status() : undefined),
-          ] as const
+          const statuses: Array<SourceStatus> = []
+          for (const store of stores.all) {
+            statuses.push(yield* sourceStatus(store))
+          }
           return statuses
         }),
         upload: saveUpload,
         // Fetches a public URL, then stores it with the same rules as a direct upload.
         uploadUrl: Effect.fn("Drive.uploadUrl")(function*(source, folder, url) {
           return yield* Effect.scoped(Effect.gen(function*() {
-            const downloaded = yield* downloadPublic(url, limits[source], fs)
+            const downloaded = yield* downloadPublic(url, stores.get(source).byteLimit, fs)
             return yield* saveUpload({
               contentType: downloaded.contentType,
               folder,
@@ -588,8 +486,6 @@ export class Drive extends Context.Service<Drive, {
     }),
   ).pipe(
     Layer.provide(Catalog.layer),
-    Layer.provide(R2.layer),
-    Layer.provide(Telegram.layer),
-    Layer.provide(HuggingFace.layer),
+    Layer.provide(Stores.layer),
   )
 }
