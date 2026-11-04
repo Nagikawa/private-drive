@@ -1,18 +1,17 @@
-import { DateTime, Effect, Redacted } from "effect"
+import { DateTime, Effect } from "effect"
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http"
 import { NotFound, StorageError } from "@private-drive/domain"
-import { sessionValid } from "../auth/session.ts"
-import { AppConfig } from "../config.ts"
+import { SessionLedger } from "../auth/ledger.ts"
 import { Drive } from "../drive/drive.ts"
 
 // Serves file bytes outside the JSON API so the browser can preview images and media with a normal URL.
 const serveContent = Effect.fn("serveContent")(function*() {
-  const config = yield* AppConfig
   const request = yield* HttpServerRequest.HttpServerRequest
+  const ledger = yield* SessionLedger
   const params = yield* HttpRouter.params
   const now = DateTime.toEpochMillis(yield* DateTime.now)
-  const token = request.cookies["session"] ?? ""
-  if (!sessionValid(Redacted.value(config.sessionSecret), token, now)) {
+  const accepted = yield* ledger.accept(request.cookies["session"] ?? "", now)
+  if (!accepted) {
     return HttpServerResponse.text("Log in first", { status: 401 })
   }
   const id = params["id"]

@@ -5,6 +5,7 @@ import { FetchHttpClient, HttpRouter } from "effect/http"
 import { HttpApiBuilder } from "effect/http-api"
 import { Api } from "@private-drive/domain"
 import { SessionHandlers } from "./auth/handlers.ts"
+import { SessionLedger } from "./auth/ledger.ts"
 import { SessionLive } from "./auth/session.ts"
 import { AppConfig } from "./config.ts"
 import { Drive } from "./drive/drive.ts"
@@ -30,6 +31,7 @@ const Server = Layer.unwrap(
     return HttpRouter.serve(Routes).pipe(
       Layer.provide(Drive.layer),
       Layer.provide(SessionLive),
+      Layer.provide(SessionLedger.layer),
       Layer.provide(AppConfig.layer),
       Layer.provide(FetchHttpClient.layer),
       Layer.provide(NodeFileSystem.layer),
