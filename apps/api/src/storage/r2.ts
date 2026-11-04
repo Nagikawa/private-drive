@@ -12,7 +12,7 @@ import {
   UploadPartCommand,
   S3Client,
 } from "@aws-sdk/client-s3"
-import { Context, Effect, Layer, Predicate, Redacted, Stream } from "effect"
+import { Context, Effect, Layer, Path, Predicate, Redacted, Result, Stream } from "effect"
 import {
   StorageError,
   contentTypeFromName,
@@ -22,6 +22,7 @@ import {
   uploadParts,
 } from "@private-drive/domain"
 import { AppConfig } from "../config.ts"
+import { forgetUpload, readPendingUploads, rememberUpload } from "./r2-uploads.ts"
 import { unavailable, type RemoteFile, type RemoteListing } from "./shared.ts"
 
 export class R2 extends Context.Service<R2, {
@@ -40,6 +41,8 @@ export class R2 extends Context.Service<R2, {
     R2,
     Effect.gen(function*() {
       const config = yield* AppConfig
+      const path = yield* Path.Path
+      const pendingPath = path.join(path.dirname(config.indexPath), "r2-uploads.json")
       const client = config.r2 === undefined
         ? undefined
         : new S3Client({
@@ -184,11 +187,19 @@ export class R2 extends Context.Service<R2, {
         if (uploadId === undefined) {
           return yield* new StorageError({ message: "R2 did not start the upload" })
         }
+        yield* Effect.tryPromise({
+          catch: () => new StorageError({ message: "Could not record the R2 upload" }),
+          try: () => rememberUpload(pendingPath, { key, uploadId }),
+        })
         const abort = send(new AbortMultipartUploadCommand({
           Bucket: bucket,
           Key: key,
           UploadId: uploadId,
         })).pipe(Effect.ignore)
+        const forget = Effect.tryPromise({
+          catch: () => undefined,
+          try: () => forgetUpload(pendingPath, uploadId),
+        }).pipe(Effect.ignore)
         yield* Effect.gen(function*() {
           const completed: Array<{ readonly ETag: string; readonly PartNumber: number }> = []
           for (const part of parts) {
@@ -221,7 +232,11 @@ export class R2 extends Context.Service<R2, {
             MultipartUpload: { Parts: completed },
             UploadId: uploadId,
           }))
-        }).pipe(Effect.tapError(() => abort))
+        }).pipe(
+          Effect.tapError(() => abort),
+          Effect.tap(() => forget),
+          Effect.tapError(() => forget),
+        )
       })
 
       // Opens an object as a byte stream so a download does not hold the whole file in memory.
@@ -288,6 +303,31 @@ export class R2 extends Context.Service<R2, {
         yield* send(new HeadBucketCommand({ Bucket: config.r2.bucket }))
         return `Connected ${config.r2.bucket}`
       })
+
+      // A crash leaves the multipart id on disk. Abort it before the server accepts another upload.
+      if (client !== undefined && config.r2 !== undefined) {
+        const bucket = config.r2.bucket
+        const pending = yield* Effect.tryPromise({
+          catch: () => [] as ReadonlyArray<{ readonly key: string; readonly uploadId: string }>,
+          try: () => readPendingUploads(pendingPath),
+        }).pipe(
+          Effect.catch(() => Effect.succeed([] as ReadonlyArray<{ readonly key: string; readonly uploadId: string }>)),
+        )
+        for (const upload of pending) {
+          const aborted = yield* send(new AbortMultipartUploadCommand({
+            Bucket: bucket,
+            Key: upload.key,
+            UploadId: upload.uploadId,
+          })).pipe(Effect.result)
+          const missing = Result.isFailure(aborted) && aborted.failure.message.toLowerCase().includes("nosuchupload")
+          if (Result.isSuccess(aborted) || missing) {
+            yield* Effect.tryPromise({
+              catch: () => undefined,
+              try: () => forgetUpload(pendingPath, upload.uploadId),
+            }).pipe(Effect.ignore)
+          }
+        }
+      }
 
       return R2.of({
         configured: config.r2 !== undefined,
