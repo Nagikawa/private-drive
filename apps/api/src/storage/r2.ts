@@ -1,14 +1,26 @@
+import { createReadStream } from "node:fs"
 import {
+  AbortMultipartUploadCommand,
+  CompleteMultipartUploadCommand,
   CopyObjectCommand,
+  CreateMultipartUploadCommand,
   DeleteObjectCommand,
   GetObjectCommand,
   HeadBucketCommand,
   ListObjectsV2Command,
   PutObjectCommand,
+  UploadPartCommand,
   S3Client,
 } from "@aws-sdk/client-s3"
-import { Context, Effect, Layer, Predicate, Redacted } from "effect"
-import { StorageError, contentTypeFromName, parentFolder, splitStorageKey } from "@private-drive/domain"
+import { Context, Effect, Layer, Predicate, Redacted, Stream } from "effect"
+import {
+  StorageError,
+  contentTypeFromName,
+  parentFolder,
+  splitStorageKey,
+  uploadPartBytes,
+  uploadParts,
+} from "@private-drive/domain"
 import { AppConfig } from "../config.ts"
 import { unavailable, type RemoteFile, type RemoteListing } from "./shared.ts"
 
@@ -18,7 +30,9 @@ export class R2 extends Context.Service<R2, {
   delete(key: string): Effect.Effect<void, StorageError>
   get(key: string): Effect.Effect<Uint8Array, StorageError>
   list(folder: string, recursive: boolean): Effect.Effect<RemoteListing, StorageError>
+  open(key: string): Effect.Effect<Stream.Stream<Uint8Array, StorageError>, StorageError>
   put(key: string, bytes: Uint8Array, contentType: string): Effect.Effect<void, StorageError>
+  putFile(key: string, path: string, size: number, contentType: string): Effect.Effect<void, StorageError>
   status(): Effect.Effect<string, StorageError>
 }>()("private-drive/api/storage/R2") {
   // Builds one S3 client when R2 credentials exist, and fails the methods when they do not.
@@ -131,7 +145,105 @@ export class R2 extends Context.Service<R2, {
         }))
       })
 
-      // Downloads an object body for preview and for moves that need the bytes.
+      // Streams a large file in parts so the process never holds the whole object in one buffer.
+      const putFile = Effect.fn("R2.putFile")(function*(key: string, path: string, size: number, contentType: string) {
+        if (config.r2 === undefined) {
+          return yield* unavailable("r2")
+        }
+        const bucket = config.r2.bucket
+        const parts = uploadParts(size, uploadPartBytes(size))
+        if (parts.length <= 1) {
+          if (size === 0) {
+            yield* send(new PutObjectCommand({
+              Body: new Uint8Array(),
+              Bucket: bucket,
+              ContentType: contentType,
+              Key: key,
+            }))
+            return
+          }
+          yield* Effect.acquireUseRelease(
+            Effect.sync(() => createReadStream(path)),
+            (body) =>
+              send(new PutObjectCommand({
+                Body: body,
+                Bucket: bucket,
+                ContentLength: size,
+                ContentType: contentType,
+                Key: key,
+              })),
+            (body) => Effect.sync(() => body.destroy()),
+          )
+          return
+        }
+        const created = yield* send<{ readonly UploadId?: string }>(new CreateMultipartUploadCommand({
+          Bucket: bucket,
+          ContentType: contentType,
+          Key: key,
+        }))
+        const uploadId = created.UploadId
+        if (uploadId === undefined) {
+          return yield* new StorageError({ message: "R2 did not start the upload" })
+        }
+        const abort = send(new AbortMultipartUploadCommand({
+          Bucket: bucket,
+          Key: key,
+          UploadId: uploadId,
+        })).pipe(Effect.ignore)
+        yield* Effect.gen(function*() {
+          const completed: Array<{ readonly ETag: string; readonly PartNumber: number }> = []
+          for (const part of parts) {
+            const output = yield* Effect.acquireUseRelease(
+              Effect.sync(() =>
+                createReadStream(path, {
+                  end: part.offset + part.length - 1,
+                  start: part.offset,
+                })
+              ),
+              (body) =>
+                send<{ readonly ETag?: string }>(new UploadPartCommand({
+                  Body: body,
+                  Bucket: bucket,
+                  ContentLength: part.length,
+                  Key: key,
+                  PartNumber: part.number,
+                  UploadId: uploadId,
+                })),
+              (body) => Effect.sync(() => body.destroy()),
+            )
+            if (output.ETag === undefined) {
+              return yield* new StorageError({ message: "R2 did not accept an upload part" })
+            }
+            completed.push({ ETag: output.ETag, PartNumber: part.number })
+          }
+          yield* send(new CompleteMultipartUploadCommand({
+            Bucket: bucket,
+            Key: key,
+            MultipartUpload: { Parts: completed },
+            UploadId: uploadId,
+          }))
+        }).pipe(Effect.tapError(() => abort))
+      })
+
+      // Opens an object as a byte stream so a download does not hold the whole file in memory.
+      const open = Effect.fn("R2.open")(function*(key: string) {
+        if (config.r2 === undefined) {
+          return yield* unavailable("r2")
+        }
+        const output = yield* send<{
+          readonly Body?: { readonly transformToWebStream: () => ReadableStream<Uint8Array> }
+        }>(new GetObjectCommand({ Bucket: config.r2.bucket, Key: key }))
+        const body = output.Body
+        if (body === undefined) {
+          return yield* new StorageError({ message: "R2 returned no file content" })
+        }
+        return Stream.fromReadableStream({
+          evaluate: () => body.transformToWebStream(),
+          onError: () => new StorageError({ message: "R2 download failed" }),
+        })
+      })
+
+      // Downloads an object body for moves that still need the bytes.
       const get = Effect.fn("R2.get")(function*(key: string) {
         if (config.r2 === undefined) {
           return yield* unavailable("r2")
@@ -183,8 +295,10 @@ export class R2 extends Context.Service<R2, {
         copy,
         delete: remove,
         get,
+        open,
         list,
         put,
+        putFile,
         status,
       })
     }),

@@ -82,3 +82,8 @@ export class MovePayload extends Schema.Class<MovePayload>("private-drive/MovePa
 export class MoveResult extends Schema.Class<MoveResult>("private-drive/MoveResult")({
   moved: Schema.Int,
 }) {}
+
+export class RenamePayload extends Schema.Class<RenamePayload>("private-drive/RenamePayload")({
+  id: Schema.String,
+  name: Schema.String,
+}) {}

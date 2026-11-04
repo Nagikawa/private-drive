@@ -8,6 +8,7 @@ import {
   FileEntry,
   MovePayload,
   MoveResult,
+  RenamePayload,
   FolderEntry,
   FolderPayload,
   Listing,
@@ -25,9 +26,8 @@ const UploadPayload = Schema.Struct({
   file: Multipart.SingleFileSchema,
   folder: Schema.String,
   source: SourceId,
-}).pipe(HttpApiSchema.asMultipart({
-  maxFileSize: "100 MB",
-}))
+// No parser cap. Telegram still refuses a document above 50 MB, and the other stores stream the file.
+}).pipe(HttpApiSchema.asMultipart())
 
 export class SessionApi extends HttpApiGroup.make("session")
   .add(
@@ -94,6 +94,11 @@ export class FilesApi extends HttpApiGroup.make("files")
       error: StorageError,
       payload: MovePayload,
       success: MoveResult,
+    }),
+    HttpApiEndpoint.post("rename", "/files/rename", {
+      error: StorageError,
+      payload: RenamePayload,
+      success: FileEntry,
     }),
   )
   .middleware(Session)

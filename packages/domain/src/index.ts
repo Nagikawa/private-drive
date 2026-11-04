@@ -24,6 +24,7 @@ export {
   LoginPayload,
   MovePayload,
   MoveResult,
+  RenamePayload,
   NotFound,
   SourceId,
   SourceStatus,
@@ -32,7 +33,7 @@ export {
   UrlUploadPayload,
 } from "./model.ts"
 export { connectedResource } from "./policy/resource.ts"
-export { uniqueName } from "./utils/names.ts"
+export { nameKeepingType, uniqueName } from "./utils/names.ts"
 export { normalizeFolder, sanitizeFileName } from "./policy/paths.ts"
 export {
   folderName,
@@ -44,5 +45,6 @@ export {
   storageKey,
 } from "./utils/paths.ts"
 export { pure } from "./utils/pure.ts"
+export { uploadPartBytes, uploadParts, type UploadPart } from "./utils/upload-parts.ts"
 export { Session, SessionCookie } from "./session.ts"
 export { folderCrumbs, folderTree, type FolderCrumb, type FolderNode } from "./utils/tree.ts"

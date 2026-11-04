@@ -1,4 +1,4 @@
-import { Context, Effect, Layer } from "effect"
+import { Context, Effect, FileSystem, Layer, Stream } from "effect"
 import {
   DeleteResult,
   FileEntry,
@@ -15,6 +15,7 @@ import {
   isWithinFolder,
   normalizeFolder,
   pure,
+  nameKeepingType,
   sanitizeFileName,
   splitStorageKey,
   storageKey,
@@ -26,7 +27,7 @@ import { StoredFile } from "../index/schema.ts"
 import { addEntry, createdAt, rememberFolder, rememberFolderTree, replaceCatalog } from "../index/update.ts"
 import { HuggingFace } from "../storage/huggingface.ts"
 import { R2 } from "../storage/r2.ts"
-import { keepName, labels, limits, unavailable, bytesOf, type RemoteListing } from "../storage/shared.ts"
+import { keepName, labels, limits, unavailable, type RemoteListing } from "../storage/shared.ts"
 import { Telegram } from "../storage/telegram.ts"
 import { downloadPublic } from "./download.ts"
 
@@ -64,18 +65,21 @@ export class Drive extends Context.Service<Drive, {
     readonly source: SourceId
   }): Effect.Effect<Listing, StorageError>
   read(id: string): Effect.Effect<{
-    readonly bytes: Uint8Array
+    readonly body: Stream.Stream<Uint8Array, StorageError>
     readonly contentType: string
     readonly name: string
+    readonly size: number
   }, NotFound | StorageError>
   remove(ids: ReadonlyArray<string>): Effect.Effect<DeleteResult, StorageError>
   move(ids: ReadonlyArray<string>, folder: string): Effect.Effect<MoveResult, StorageError>
+  rename(id: string, name: string): Effect.Effect<FileEntry, StorageError>
   sources(): Effect.Effect<ReadonlyArray<SourceStatus>>
   upload(input: {
-    readonly bytes: Uint8Array
     readonly contentType: string
     readonly folder: string
     readonly name: string
+    readonly path: string
+    readonly size: number
     readonly source: SourceId
   }): Effect.Effect<FileEntry, StorageError>
   uploadUrl(source: SourceId, folder: string, url: string): Effect.Effect<FileEntry, StorageError>
@@ -85,6 +89,7 @@ export class Drive extends Context.Service<Drive, {
     Drive,
     Effect.gen(function*() {
       const catalog = yield* Catalog
+      const fs = yield* FileSystem.FileSystem
       const r2 = yield* R2
       const telegram = yield* Telegram
       const huggingface = yield* HuggingFace
@@ -115,15 +120,15 @@ export class Drive extends Context.Service<Drive, {
         }
       })
 
-      // Reads bytes from the store that owns the index row.
-      const readBytes = Effect.fn("Drive.readBytes")(function*(entry: StoredFile) {
+      // Opens a byte stream from the store that owns the index row.
+      const openBody = Effect.fn("Drive.openBody")(function*(entry: StoredFile) {
         if (entry.source === "r2") {
-          return yield* r2.get(entry.storageKey)
+          return yield* r2.open(entry.storageKey)
         }
         if (entry.source === "huggingface") {
-          return yield* huggingface.get(entry.storageKey)
+          return yield* huggingface.open(entry.storageKey)
         }
-        return yield* telegram.get(entry.storageKey)
+        return yield* telegram.open(entry.storageKey)
       })
 
       // Asks the listing provider for the folder, and leaves Telegram to the local index.
@@ -142,12 +147,13 @@ export class Drive extends Context.Service<Drive, {
         return empty
       })
 
-      // Stores bytes, then records the file so later lists do not depend on a second remote scan.
+      // Stores the temp file, then records it so later lists do not depend on a second remote scan.
       const saveUpload = Effect.fn("Drive.saveUpload")(function*(input: {
-        readonly bytes: Uint8Array
         readonly contentType: string
         readonly folder: string
         readonly name: string
+        readonly path: string
+        readonly size: number
         readonly source: SourceId
       }) {
         yield* ensureSource(input.source)
@@ -155,9 +161,10 @@ export class Drive extends Context.Service<Drive, {
         const safeName = yield* sanitizeFileName(input.name).pipe(
           Effect.mapError(() => new StorageError({ message: "Invalid file name" })),
         )
-        if (bytesOf(input.bytes) > limits[input.source]) {
+        const limit = limits[input.source]
+        if (limit !== undefined && input.size > limit) {
           return yield* new StorageError({
-            message: `${labels[input.source]} file size limit is ${Math.floor(limits[input.source] / (1024 * 1024))} MB`,
+            message: `${labels[input.source]} file size limit is ${Math.floor(limit / (1024 * 1024))} MB`,
           })
         }
         const current = yield* catalog.read
@@ -171,13 +178,16 @@ export class Drive extends Context.Service<Drive, {
         let storageKeyValue = key
         let telegramMessageId: number | undefined
         if (input.source === "telegram") {
-          const stored = yield* telegram.put(key, input.bytes, input.contentType)
+          const bytes = yield* fs.readFile(input.path).pipe(
+            Effect.mapError(() => new StorageError({ message: "Could not read the uploaded temporary file" })),
+          )
+          const stored = yield* telegram.put(key, bytes, input.contentType)
           storageKeyValue = stored.storageKey
           telegramMessageId = stored.messageId
         } else if (input.source === "huggingface") {
-          yield* huggingface.put(key, input.bytes)
+          yield* huggingface.putFile(key, input.path, input.size)
         } else {
-          yield* r2.put(key, input.bytes, input.contentType)
+          yield* r2.putFile(key, input.path, input.size, input.contentType)
         }
         const stamp = yield* createdAt()
         const record = new StoredFile({
@@ -186,7 +196,7 @@ export class Drive extends Context.Service<Drive, {
           folder,
           id: crypto.randomUUID(),
           name,
-          size: bytesOf(input.bytes),
+          size: input.size,
           source: input.source,
           storageKey: storageKeyValue,
           ...(telegramMessageId === undefined ? {} : { telegramMessageId: Math.trunc(telegramMessageId) }),
@@ -343,15 +353,15 @@ export class Drive extends Context.Service<Drive, {
           ] as const)
         }),
         list,
-        // Loads one file's bytes for the content route after the id is found in the index.
+        // Opens one file as a byte stream for the content route after the id is found in the index.
         read: Effect.fn("Drive.read")(function*(id: string) {
           const current = yield* catalog.read
           const entry = current.entries.find((item) => item.id === id)
           if (entry === undefined) {
             return yield* new NotFound({ message: "File not found" })
           }
-          const bytes = yield* readBytes(entry)
-          return { bytes, contentType: entry.contentType, name: entry.name }
+          const body = yield* openBody(entry)
+          return { body, contentType: entry.contentType, name: entry.name, size: entry.size }
         }),
         // Deletes each selected file from its store, then drops the index row.
         remove: Effect.fn("Drive.remove")(function*(ids: ReadonlyArray<string>) {
@@ -446,6 +456,59 @@ export class Drive extends Context.Service<Drive, {
           }
           return new MoveResult({ moved })
         }),
+        // Renames one file while keeping its stored extension and content type.
+        rename: Effect.fn("Drive.rename")(function*(id: string, requested: string) {
+          const current = yield* catalog.read
+          const entry = current.entries.find((item) => item.id === id)
+          if (entry === undefined) {
+            return yield* new StorageError({ message: "File not found" })
+          }
+          const name = yield* nameKeepingType(entry.name, requested).pipe(
+            Effect.mapError(() => new StorageError({ message: "Invalid file name" })),
+          )
+          if (name === entry.name) {
+            return yield* toEntry(entry)
+          }
+          const occupied = current.entries.some((item) =>
+            item.id !== entry.id &&
+            item.source === entry.source &&
+            item.folder === entry.folder &&
+            item.name === name
+          )
+          if (occupied) {
+            return yield* new StorageError({ message: `"${name}" already exists in this folder` })
+          }
+          yield* ensureSource(entry.source)
+          const nextKey = yield* storageKey(entry.folder, name)
+          if (entry.source === "r2" && entry.storageKey !== nextKey) {
+            yield* r2.copy(entry.storageKey, nextKey)
+            yield* r2.delete(entry.storageKey)
+          } else if (entry.source === "huggingface" && entry.storageKey !== nextKey) {
+            const bytes = yield* huggingface.get(entry.storageKey)
+            yield* huggingface.put(nextKey, bytes)
+            yield* huggingface.delete(entry.storageKey)
+          }
+          const renamed = new StoredFile({
+            contentType: entry.contentType,
+            createdAt: entry.createdAt,
+            folder: entry.folder,
+            id: entry.id,
+            name,
+            size: entry.size,
+            source: entry.source,
+            storageKey: entry.source === "telegram" ? entry.storageKey : nextKey,
+            ...(entry.telegramMessageId === undefined ? {} : { telegramMessageId: entry.telegramMessageId }),
+          })
+          yield* catalog.modify((data) => [
+            replaceCatalog(
+              data,
+              data.entries.map((item) => item.id === entry.id ? renamed : item),
+              data.folders,
+            ),
+            undefined,
+          ] as const)
+          return yield* toEntry(renamed)
+        }),
         // Probes each configured store so the shell can hide sources that are not set up.
         sources: Effect.fn("Drive.sources")(function*() {
           const statuses = [
@@ -458,14 +521,17 @@ export class Drive extends Context.Service<Drive, {
         upload: saveUpload,
         // Fetches a public URL, then stores it with the same rules as a direct upload.
         uploadUrl: Effect.fn("Drive.uploadUrl")(function*(source, folder, url) {
-          const downloaded = yield* downloadPublic(url, limits[source])
-          return yield* saveUpload({
-            bytes: downloaded.bytes,
-            contentType: downloaded.contentType,
-            folder,
-            name: downloaded.name,
-            source,
-          })
+          return yield* Effect.scoped(Effect.gen(function*() {
+            const downloaded = yield* downloadPublic(url, limits[source], fs)
+            return yield* saveUpload({
+              contentType: downloaded.contentType,
+              folder,
+              name: downloaded.name,
+              path: downloaded.path,
+              size: downloaded.size,
+              source,
+            })
+          }))
         }),
       })
     }),

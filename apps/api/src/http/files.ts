@@ -1,4 +1,4 @@
-import { Effect, FileSystem } from "effect"
+import { ByteSize, Effect, FileSystem, Option } from "effect"
 import { HttpApiBuilder } from "effect/http-api"
 import { Api, StorageError, contentTypeFromName, type SourceId } from "@private-drive/domain"
 import { Drive } from "../drive/drive.ts"
@@ -16,19 +16,24 @@ export const FilesHandlers = HttpApiBuilder.group(
     const drive = yield* Drive
     const fs = yield* FileSystem.FileSystem
 
-    // Reads the temporary multipart file and hands the bytes to the drive, filling in a type from the name when the browser sent a generic one.
+    // Stats the temporary multipart file and passes its path through, so a large body is streamed from disk.
     const upload = Effect.fn("FilesHandlers.upload")(function*(payload: UploadBody) {
-      const bytes = yield* fs.readFile(payload.file.path).pipe(
+      const info = yield* fs.stat(payload.file.path).pipe(
         Effect.mapError(() => new StorageError({ message: "Could not read the uploaded temporary file" })),
       )
+      const size = yield* Option.match(ByteSize.toNumber(info.size), {
+        onNone: () => Effect.fail(new StorageError({ message: "The uploaded file is too large to index" })),
+        onSome: Effect.succeed,
+      })
       const contentType = payload.file.contentType === "" || payload.file.contentType === "application/octet-stream"
         ? yield* contentTypeFromName(payload.file.name)
         : payload.file.contentType
       return yield* drive.upload({
-        bytes,
         contentType,
         folder: payload.folder,
         name: payload.file.name,
+        path: payload.file.path,
+        size,
         source: payload.source,
       })
     })
@@ -49,6 +54,8 @@ export const FilesHandlers = HttpApiBuilder.group(
         }),
       // Moves the selected ids into another folder on the same source.
       move: ({ payload }) => drive.move(payload.ids, payload.folder),
+      // Renames one file and keeps the stored extension even if the request names another type.
+      rename: ({ payload }) => drive.rename(payload.id, payload.name),
       // Deletes the selected file ids from their stores and the index.
       remove: ({ payload }) => drive.remove(payload.ids),
       // Reports which storage providers are configured and reachable.

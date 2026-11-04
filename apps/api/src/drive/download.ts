@@ -1,5 +1,5 @@
 import { lookup } from "node:dns/promises"
-import { Effect } from "effect"
+import { Effect, FileSystem } from "effect"
 import { StorageError, blockedAddress, contentTypeFromName, inspectDownloadUrl, sanitizeFileName } from "@private-drive/domain"
 
 // Resolves a hostname and refuses it when any address is private, before the body is read.
@@ -22,7 +22,12 @@ const assertPublicHost = Effect.fn("Drive.assertPublicHost")(function*(url: URL)
 })
 
 // Downloads a public URL with manual redirects so each hop is checked before it is followed.
-export const downloadPublic = Effect.fn("Drive.downloadPublic")(function*(rawUrl: string, maxBytes: number) {
+// The body is written to a temp file so a large download is not assembled in memory. The caller closes the scope.
+export const downloadPublic = Effect.fn("Drive.downloadPublic")(function*(
+  rawUrl: string,
+  maxBytes: number | undefined,
+  fs: FileSystem.FileSystem,
+) {
   let current = yield* inspectDownloadUrl(rawUrl).pipe(
     Effect.mapError((error) => new StorageError({ message: error.message })),
   )
@@ -49,12 +54,19 @@ export const downloadPublic = Effect.fn("Drive.downloadPublic")(function*(rawUrl
     if (!response.ok || response.body === null) {
       return yield* new StorageError({ message: `Download failed (${response.status})` })
     }
-    const length = Number(response.headers.get("content-length") ?? "0")
-    if (Number.isFinite(length) && length > maxBytes) {
-      return yield* new StorageError({ message: "The URL file exceeds the size limit" })
+    if (maxBytes !== undefined) {
+      const length = Number(response.headers.get("content-length") ?? "0")
+      if (Number.isFinite(length) && length > maxBytes) {
+        return yield* new StorageError({ message: "The URL file exceeds the size limit" })
+      }
     }
+    const path = yield* fs.makeTempFileScoped({ prefix: "private-drive-url-" }).pipe(
+      Effect.mapError(() => new StorageError({ message: "Could not store the URL file" })),
+    )
+    const handle = yield* fs.open(path, { flag: "w" }).pipe(
+      Effect.mapError(() => new StorageError({ message: "Could not store the URL file" })),
+    )
     const reader = response.body.getReader()
-    const chunks: Array<Uint8Array> = []
     let total = 0
     while (true) {
       const step = yield* Effect.tryPromise({
@@ -65,17 +77,16 @@ export const downloadPublic = Effect.fn("Drive.downloadPublic")(function*(rawUrl
         break
       }
       total += step.value.byteLength
-      if (total > maxBytes) {
+      if (maxBytes !== undefined && total > maxBytes) {
         return yield* new StorageError({ message: "The URL file exceeds the size limit" })
       }
-      chunks.push(step.value)
+      yield* handle.writeAll(step.value).pipe(
+        Effect.mapError(() => new StorageError({ message: "Could not store the URL file" })),
+      )
     }
-    const bytes = new Uint8Array(total)
-    let offset = 0
-    for (const chunk of chunks) {
-      bytes.set(chunk, offset)
-      offset += chunk.byteLength
-    }
+    yield* handle.sync.pipe(
+      Effect.mapError(() => new StorageError({ message: "Could not store the URL file" })),
+    )
     const rawName = yield* Effect.try({
       catch: () => new StorageError({ message: "Invalid file name" }),
       try: () => decodeURIComponent(current.pathname.split("/").at(-1) ?? ""),
@@ -87,7 +98,7 @@ export const downloadPublic = Effect.fn("Drive.downloadPublic")(function*(rawUrl
     const contentType = headerType === undefined || headerType === ""
       ? yield* contentTypeFromName(name)
       : headerType
-    return { bytes, contentType, name }
+    return { contentType, name, path, size: total }
   }
   return yield* new StorageError({ message: "Too many redirects" })
 })

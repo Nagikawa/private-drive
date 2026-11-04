@@ -1,4 +1,4 @@
-import { Context, Effect, Layer, Redacted, Schema } from "effect"
+import { Context, Effect, Layer, Redacted, Schema, Stream } from "effect"
 import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http"
 import { StorageError, splitStorageKey } from "@private-drive/domain"
 import { AppConfig } from "../config.ts"
@@ -13,6 +13,7 @@ export class Telegram extends Context.Service<Telegram, {
   readonly configured: boolean
   deleteMessage(messageId: number): Effect.Effect<void, StorageError>
   get(fileId: string): Effect.Effect<Uint8Array, StorageError>
+  open(fileId: string): Effect.Effect<Stream.Stream<Uint8Array, StorageError>, StorageError>
   put(key: string, bytes: Uint8Array, contentType: string): Effect.Effect<TelegramStored, StorageError>
   status(): Effect.Effect<string, StorageError>
 }>()("private-drive/api/storage/Telegram") {
@@ -70,7 +71,38 @@ export class Telegram extends Context.Service<Telegram, {
         }
       })
 
-      // Resolves a file id to bytes so preview can show a file that lives in the chat.
+      // Opens a bot file as a byte stream so a download does not hold the whole file in memory.
+      const open = Effect.fn("Telegram.open")(function*(fileId: string) {
+        if (config.telegram === undefined) {
+          return yield* unavailable("telegram")
+        }
+        const token = Redacted.value(config.telegram.token)
+        const info = yield* HttpClientRequest.get(
+          `https://api.telegram.org/bot${token}/getFile?file_id=${encodeURIComponent(fileId)}`,
+        ).pipe(
+          http.execute,
+          Effect.flatMap(HttpClientResponse.schemaBodyJson(Schema.Struct({
+            ok: Schema.Boolean,
+            result: Schema.optional(Schema.Struct({ file_path: Schema.optional(Schema.String) })),
+          }))),
+          Effect.mapError(() => new StorageError({ message: "Telegram file lookup failed" })),
+        )
+        const filePath = info.result?.file_path
+        if (!info.ok || filePath === undefined) {
+          return yield* new StorageError({ message: "Telegram file not found" })
+        }
+        const response = yield* HttpClientRequest.get(
+          `https://api.telegram.org/file/bot${token}/${filePath}`,
+        ).pipe(
+          http.execute,
+          Effect.mapError(() => new StorageError({ message: "Telegram download failed" })),
+        )
+        return response.stream.pipe(
+          Stream.mapError(() => new StorageError({ message: "Telegram download failed" })),
+        )
+      })
+
+      // Resolves a file id to bytes for callers that still need the whole document.
       const get = Effect.fn("Telegram.get")(function*(fileId: string) {
         if (config.telegram === undefined) {
           return yield* unavailable("telegram")
@@ -131,6 +163,7 @@ export class Telegram extends Context.Service<Telegram, {
         configured: config.telegram !== undefined,
         deleteMessage,
         get,
+        open,
         put,
         status,
       })

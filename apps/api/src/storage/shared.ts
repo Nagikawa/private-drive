@@ -1,8 +1,7 @@
 import { StorageError, type SourceId } from "@private-drive/domain"
 
-export const limits: Record<SourceId, number> = {
-  huggingface: 50 * 1024 * 1024,
-  r2: 100 * 1024 * 1024,
+// Telegram's bot API rejects a document above 50 MB. R2 and Hugging Face stream, so they have no app cap.
+export const limits: Partial<Record<SourceId, number>> = {
   telegram: 50 * 1024 * 1024,
 }
 

@@ -30,11 +30,14 @@ const serveContent = Effect.fn("serveContent")(function*() {
   if (file instanceof StorageError) {
     return HttpServerResponse.text(file.message, { status: 400 })
   }
-  return HttpServerResponse.uint8Array(file.bytes, {
+  const download = new URL(request.url, "http://127.0.0.1").searchParams.get("download") === "1"
+  const disposition = download ? "attachment" : "inline"
+  return HttpServerResponse.stream(file.body, {
     contentType: file.contentType,
+    ...(file.size > 0 ? { contentLength: file.size } : {}),
     headers: {
       "cache-control": "private, max-age=60",
-      "content-disposition": `inline; filename*=UTF-8''${encodeURIComponent(file.name)}`,
+      "content-disposition": `${disposition}; filename*=UTF-8''${encodeURIComponent(file.name)}`,
     },
   })
 })
