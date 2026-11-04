@@ -1,4 +1,4 @@
-export const listSorts = ["name", "size", "created"] as const
+export const listSorts = ["name", "size", "created", "type"] as const
 export type ListSort = (typeof listSorts)[number]
 
 export const listOrders = ["asc", "desc"] as const
@@ -8,6 +8,7 @@ export type ListOrder = (typeof listOrders)[number]
 export const listPageSize = 100
 
 export interface ListRow {
+  readonly contentType?: string
   readonly createdAt: string
   readonly id: string
   readonly name: string
@@ -46,6 +47,8 @@ const compareRows = (sort: ListSort, order: ListOrder) => (left: ListRow, right:
     ? left.size - right.size
     : sort === "created"
     ? left.createdAt.localeCompare(right.createdAt)
+    : sort === "type"
+    ? (left.contentType ?? "").localeCompare(right.contentType ?? "")
     : left.name.localeCompare(right.name, "zh-Hant")
   const tied = primary === 0 ? left.id.localeCompare(right.id) : primary
   return order === "desc" ? -tied : tied

@@ -37,13 +37,33 @@ interface BrowseState {
   hasNext: boolean;
 }
 
-type FileSort = 'name-asc' | 'name-desc' | 'size-asc' | 'size-desc' | 'created-asc' | 'created-desc';
+type FileSort =
+  | 'name-asc'
+  | 'name-desc'
+  | 'size-asc'
+  | 'size-desc'
+  | 'created-asc'
+  | 'created-desc'
+  | 'type-asc'
+  | 'type-desc';
 
-const fileSorts: ReadonlyArray<FileSort> = ['name-asc', 'name-desc', 'size-asc', 'size-desc', 'created-asc', 'created-desc'];
+const fileSorts: ReadonlyArray<FileSort> = [
+  'name-asc',
+  'name-desc',
+  'size-asc',
+  'size-desc',
+  'created-asc',
+  'created-desc',
+  'type-asc',
+  'type-desc',
+];
 
-const parseFileSort = (value: FileSort): { sort: 'name' | 'size' | 'created'; order: 'asc' | 'desc' } => {
+const parseFileSort = (value: FileSort): { sort: 'name' | 'size' | 'created' | 'type'; order: 'asc' | 'desc' } => {
   const [sort, order] = value.split('-');
-  if ((sort === 'name' || sort === 'size' || sort === 'created') && (order === 'asc' || order === 'desc')) {
+  if (
+    (sort === 'name' || sort === 'size' || sort === 'created' || sort === 'type') &&
+    (order === 'asc' || order === 'desc')
+  ) {
     return { sort, order };
   }
   return { sort: 'name', order: 'asc' };

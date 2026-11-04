@@ -63,7 +63,7 @@ export class FilesApi extends HttpApiGroup.make("files")
         order: Schema.optional(Schema.Literals(["asc", "desc"])),
         recursive: Schema.optional(Schema.Literals(["true", "false"])),
         search: Schema.optional(Schema.String),
-        sort: Schema.optional(Schema.Literals(["name", "size", "created"])),
+        sort: Schema.optional(Schema.Literals(["name", "size", "created", "type"])),
         source: SourceId,
       },
       success: Listing,

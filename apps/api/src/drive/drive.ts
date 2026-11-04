@@ -65,7 +65,7 @@ export class Drive extends Context.Service<Drive, {
     readonly order: "asc" | "desc"
     readonly recursive: boolean
     readonly search: string
-    readonly sort: "name" | "size" | "created"
+    readonly sort: "name" | "size" | "created" | "type"
     readonly source: SourceId
   }): Effect.Effect<Listing, StorageError>
   read(id: string): Effect.Effect<{
@@ -229,7 +229,7 @@ export class Drive extends Context.Service<Drive, {
         readonly order: "asc" | "desc"
         readonly recursive: boolean
         readonly search: string
-        readonly sort: "name" | "size" | "created"
+        readonly sort: "name" | "size" | "created" | "type"
         readonly source: SourceId
       }) {
         yield* ensureSource(input.source)
