@@ -1,14 +1,15 @@
-import { describe, expect, it } from "@effect/vitest"
-import { Effect } from "effect"
-import { InvalidFileName, InvalidFolderPath, ResourceNameError } from "../src/errors.ts"
+import * as Vitest from '@effect/vitest';
+import * as Effect from 'effect/Effect';
 
-describe("domain errors", () => {
-  // Callers match these tags instead of reading thrown exceptions.
-  it.effect("tags the expected failures", () =>
-    Effect.sync(() => {
-      expect(new InvalidFolderPath({ message: "bad" })._tag).toBe("InvalidFolderPath")
-      expect(new InvalidFileName({ message: "bad" })._tag).toBe("InvalidFileName")
-      expect(new ResourceNameError({ message: "bad" })._tag).toBe("ResourceNameError")
-    }),
-  )
-})
+import { InvalidFileName, InvalidFolderPath, ResourceNameError } from '../src/errors.ts';
+
+Vitest.describe('domain errors', () => {
+	// Callers match these tags instead of reading thrown exceptions.
+	Vitest.it.effect('tags the expected failures', () =>
+		Effect.sync(() => {
+			Vitest.expect(new InvalidFolderPath({ message: 'bad' })._tag).toBe('InvalidFolderPath');
+			Vitest.expect(new InvalidFileName({ message: 'bad' })._tag).toBe('InvalidFileName');
+			Vitest.expect(new ResourceNameError({ message: 'bad' })._tag).toBe('ResourceNameError');
+		}),
+	);
+});

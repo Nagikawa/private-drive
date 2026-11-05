@@ -1,50 +1,67 @@
 <dialog class="modal" #dialog (close)="onClose()">
-  <div class="modal-box">
-    <h3 class="text-lg font-bold">Move to folder</h3>
-    <p class="py-4">Move the {{ data()?.ids?.length ?? 0 }} selected files to "{{ destinationLabel() }}".</p>
-    <div class="breadcrumbs text-sm" aria-label="Destination folder">
-      <ul>
-        <li><button class="btn btn-ghost btn-sm" type="button" (click)="openFolder('')" [disabled]="busy()">Root</button></li>
-        @for (crumb of crumbs(); track crumb.path) {
-          <li>
-            <button class="btn btn-ghost btn-sm" type="button" (click)="openFolder(crumb.path)" [disabled]="busy()">
-              {{ crumb.name }}
-            </button>
-          </li>
-        }
-      </ul>
-    </div>
-    @if (!state().ready) {
-      <progress class="progress w-full" aria-label="Loading folders"></progress>
-    } @else if (state().error) {
-      <div class="alert alert-error" role="alert">
-        <span>{{ state().error }}</span>
-      </div>
-    } @else if (state().folders.length === 0) {
-      <div class="alert">
-        <span>No subfolders.</span>
-      </div>
-    } @else {
-      <ul class="menu bg-base-200 rounded-box">
-        @for (folder of state().folders; track folder.path) {
-          <li>
-            <button type="button" (click)="openFolder(folder.path)" [disabled]="busy()">{{ folder.name }}</button>
-          </li>
-        }
-      </ul>
-    }
-    @if (busy()) {
-      <progress class="progress w-full" aria-label="Moving"></progress>
-    }
-    <p aria-live="polite">{{ busy() ? 'Moving' : '' }}</p>
-    @if (errorMessage()) {
-      <div class="alert alert-error" role="alert">
-        <span>{{ errorMessage() }}</span>
-      </div>
-    }
-    <div class="modal-action">
-      <button class="btn" type="button" (click)="cancel()" [disabled]="busy()">Cancel</button>
-      <button class="btn" type="button" (click)="move()" [disabled]="busy()">Move here</button>
-    </div>
-  </div>
+	<div class="modal-box">
+		<h3 class="text-lg font-bold">Move to folder</h3>
+		<p class="py-4">
+			Move the {{ data()?.ids?.length ?? 0 }} selected files to "{{ destinationLabel() }}".
+		</p>
+		<div class="breadcrumbs text-sm" aria-label="Destination folder">
+			<ul>
+				<li>
+					<button
+						class="btn btn-ghost btn-sm"
+						type="button"
+						(click)="openFolder('')"
+						[disabled]="busy()"
+					>
+						Root
+					</button>
+				</li>
+				@for (crumb of crumbs(); track crumb.path) {
+				<li>
+					<button
+						class="btn btn-ghost btn-sm"
+						type="button"
+						(click)="openFolder(crumb.path)"
+						[disabled]="busy()"
+					>
+						{{ crumb.name }}
+					</button>
+				</li>
+				}
+			</ul>
+		</div>
+		@if (!state().ready) {
+		<progress class="progress w-full" aria-label="Loading folders"></progress>
+		} @else if (state().error) {
+		<div class="alert alert-error" role="alert">
+			<span>{{ state().error }}</span>
+		</div>
+		} @else if (state().folders.length === 0) {
+		<div class="alert">
+			<span>No subfolders.</span>
+		</div>
+		} @else {
+		<ul class="menu bg-base-200 rounded-box">
+			@for (folder of state().folders; track folder.path) {
+			<li>
+				<button type="button" (click)="openFolder(folder.path)" [disabled]="busy()">
+					{{ folder.name }}
+				</button>
+			</li>
+			}
+		</ul>
+		} @if (busy()) {
+		<progress class="progress w-full" aria-label="Moving"></progress>
+		}
+		<p aria-live="polite">{{ busy() ? 'Moving' : '' }}</p>
+		@if (errorMessage()) {
+		<div class="alert alert-error" role="alert">
+			<span>{{ errorMessage() }}</span>
+		</div>
+		}
+		<div class="modal-action">
+			<button class="btn" type="button" (click)="cancel()" [disabled]="busy()">Cancel</button>
+			<button class="btn" type="button" (click)="move()" [disabled]="busy()">Move here</button>
+		</div>
+	</div>
 </dialog>

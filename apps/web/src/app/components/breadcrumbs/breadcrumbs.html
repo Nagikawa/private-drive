@@ -1,10 +1,12 @@
 <ul>
-  <li>
-    <button class="btn btn-ghost btn-sm" type="button" (click)="choose('')">Root</button>
-  </li>
-  @for (crumb of crumbs(); track crumb.path) {
-    <li>
-      <button class="btn btn-ghost btn-sm" type="button" (click)="choose(crumb.path)">{{ crumb.name }}</button>
-    </li>
-  }
+	<li>
+		<button class="btn btn-ghost btn-sm" type="button" (click)="choose('')">Root</button>
+	</li>
+	@for (crumb of crumbs(); track crumb.path) {
+	<li>
+		<button class="btn btn-ghost btn-sm" type="button" (click)="choose(crumb.path)">
+			{{ crumb.name }}
+		</button>
+	</li>
+	}
 </ul>

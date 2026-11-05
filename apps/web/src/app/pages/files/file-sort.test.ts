@@ -1,15 +1,16 @@
-import { describe, expect, it } from '@effect/vitest';
-import { Effect } from 'effect';
+import * as Vitest from '@effect/vitest';
+import * as Effect from 'effect/Effect';
+
 import { isFileSort, parseFileSort } from './file-sort';
 
-describe('file sort', () => {
-  // The select value is one token. The list request wants the field and the direction apart.
-  it.effect('splits a known sort and rejects anything else', () =>
-    Effect.sync(() => {
-      expect(parseFileSort('created-desc')).toEqual({ sort: 'created', order: 'desc' });
-      expect(parseFileSort('type-asc')).toEqual({ sort: 'type', order: 'asc' });
-      expect(isFileSort('size-desc')).toBe(true);
-      expect(isFileSort('recent')).toBe(false);
-    }),
-  );
+Vitest.describe('file sort', () => {
+	// The select value is one token. The list request wants the field and the direction apart.
+	Vitest.it.effect('splits a known sort and rejects anything else', () =>
+		Effect.sync(() => {
+			Vitest.expect(parseFileSort('created-desc')).toEqual({ sort: 'created', order: 'desc' });
+			Vitest.expect(parseFileSort('type-asc')).toEqual({ sort: 'type', order: 'asc' });
+			Vitest.expect(isFileSort('size-desc')).toBe(true);
+			Vitest.expect(isFileSort('recent')).toBe(false);
+		}),
+	);
 });

@@ -1,20 +1,21 @@
-import { describe, expect, it } from "@effect/vitest"
-import * as Effect from "effect/Effect"
-import { pure } from "../src/utils/pure.ts"
-import { parentFolder } from "../src/utils/paths.ts"
+import * as Vitest from '@effect/vitest';
+import * as Effect from 'effect/Effect';
 
-describe("pure", () => {
-  // A successful helper returns its value without the caller yielding.
-  it.effect("reads a successful effect", () =>
-    Effect.gen(function* () {
-      expect(pure(parentFolder("photos/trip"), "")).toBe("photos")
-    }),
-  )
+import { parentFolder } from '../src/utils/paths.ts';
+import { pure } from '../src/utils/pure.ts';
 
-  // A defect becomes the fallback instead of an exception at the sync boundary.
-  it.effect("returns the fallback when the effect dies", () =>
-    Effect.gen(function* () {
-      expect(pure(Effect.die("boom"), "fallback")).toBe("fallback")
-    }),
-  )
-})
+Vitest.describe('pure', () => {
+	// A successful helper returns its value without the caller yielding.
+	Vitest.it.effect('reads a successful effect', () =>
+		Effect.gen(function* () {
+			Vitest.expect(pure(parentFolder('photos/trip'), '')).toBe('photos');
+		}),
+	);
+
+	// A defect becomes the fallback instead of an exception at the sync boundary.
+	Vitest.it.effect('returns the fallback when the effect dies', () =>
+		Effect.gen(function* () {
+			Vitest.expect(pure(Effect.die('boom'), 'fallback')).toBe('fallback');
+		}),
+	);
+});

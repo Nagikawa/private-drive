@@ -23,11 +23,5 @@
 	"sortTailwindcss": {
 		"functions": ["cn", "clsx", "cva"]
 	},
-	"ignorePatterns": [
-		"**/dist",
-		"**/.turbo",
-		"**/dev-dist",
-		"**/node_modules",
-		"**/pnpm-lock.yaml",
-	]
+	"ignorePatterns": ["**/dist", "**/.turbo", "**/dev-dist", "**/node_modules", "**/pnpm-lock.yaml"]
 }

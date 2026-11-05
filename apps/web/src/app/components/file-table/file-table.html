@@ -1,82 +1,157 @@
 <div class="flex h-full min-h-0 min-w-0 flex-col">
-  <table class="table table-fixed w-full shrink-0 rounded-none!">
-    <colgroup>
-      <col class="w-20" />
-      <col />
-      <col class="w-32" />
-      <col class="w-44" />
-    </colgroup>
-    <thead>
-      <tr>
-        <th></th>
-        <th>Name</th>
-        <th>Size</th>
-        <th><span class="sr-only">Options</span></th>
-      </tr>
-    </thead>
-  </table>
-  <cdk-virtual-scroll-viewport
-    class="min-h-0 w-full flex-1"
-    [itemSize]="itemSize"
-    [minBufferPx]="itemSize"
-    [maxBufferPx]="itemSize * 3"
-  >
-    <table class="table table-fixed w-full rounded-none!">
-      <colgroup>
-        <col class="w-20" />
-        <col />
-        <col class="w-32" />
-        <col class="w-44" />
-      </colgroup>
-      <tbody>
-        <tr
-          *cdkVirtualFor="let file of files(); trackBy: trackFile"
-          draggable="true"
-          (mousedown)="press($event)"
-          (dragstart)="dragStart($event, file.id)"
-          (dragend)="dragEnd()"
-        >
-          <th>
-            <label>
-              <input
-                type="checkbox"
-                class="checkbox"
-                [checked]="selected().includes(file.id)"
-                [attr.aria-label]="'Select ' + file.name"
-                (change)="toggle(file.id, $event)"
-              />
-            </label>
-          </th>
-          <td class="max-w-0 overflow-hidden">
-            <button class="btn btn-ghost btn-xs max-w-full truncate" type="button" draggable="true" (click)="preview(file)">{{ file.name }}</button>
-          </td>
-          <td><span class="badge badge-ghost badge-sm">{{ formatBytes(file.size) }}</span></td>
-          <th>
-            <div class="file-action flex items-center justify-end gap-1">
-              <button class="btn btn-ghost btn-xs btn-square" type="button" [attr.aria-label]="'Copy link for ' + file.name" (click)="act(file, 'share')">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="h-4 w-4" aria-hidden="true">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244" />
-                </svg>
-              </button>
-              <button class="btn btn-ghost btn-xs btn-square" type="button" [attr.aria-label]="'Download ' + file.name" (click)="act(file, 'download')">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="h-4 w-4" aria-hidden="true">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
-                </svg>
-              </button>
-              <button class="btn btn-ghost btn-xs btn-square" type="button" [attr.aria-label]="'Delete ' + file.name" (click)="act(file, 'delete')">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="h-4 w-4" aria-hidden="true">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
-                </svg>
-              </button>
-              <button class="btn btn-ghost btn-xs btn-square" type="button" [attr.aria-label]="'Rename ' + file.name" (click)="act(file, 'rename')">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="h-4 w-4" aria-hidden="true">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
-                </svg>
-              </button>
-            </div>
-          </th>
-        </tr>
-      </tbody>
-    </table>
-  </cdk-virtual-scroll-viewport>
+	<table class="table w-full shrink-0 table-fixed rounded-none!">
+		<colgroup>
+			<col class="w-20" />
+			<col />
+			<col class="w-32" />
+			<col class="w-44" />
+		</colgroup>
+		<thead>
+			<tr>
+				<th></th>
+				<th>Name</th>
+				<th>Size</th>
+				<th><span class="sr-only">Options</span></th>
+			</tr>
+		</thead>
+	</table>
+	<cdk-virtual-scroll-viewport
+		class="min-h-0 w-full flex-1"
+		[itemSize]="itemSize"
+		[minBufferPx]="itemSize"
+		[maxBufferPx]="itemSize * 3"
+	>
+		<table class="table w-full table-fixed rounded-none!">
+			<colgroup>
+				<col class="w-20" />
+				<col />
+				<col class="w-32" />
+				<col class="w-44" />
+			</colgroup>
+			<tbody>
+				<tr
+					*cdkVirtualFor="let file of files(); trackBy: trackFile"
+					draggable="true"
+					(mousedown)="press($event)"
+					(dragstart)="dragStart($event, file.id)"
+					(dragend)="dragEnd()"
+				>
+					<th>
+						<label>
+							<input
+								type="checkbox"
+								class="checkbox"
+								[checked]="selected().includes(file.id)"
+								[attr.aria-label]="'Select ' + file.name"
+								(change)="toggle(file.id, $event)"
+							/>
+						</label>
+					</th>
+					<td class="max-w-0 overflow-hidden">
+						<button
+							class="btn btn-ghost btn-xs max-w-full truncate"
+							type="button"
+							draggable="true"
+							(click)="preview(file)"
+						>
+							{{ file.name }}
+						</button>
+					</td>
+					<td><span class="badge badge-ghost badge-sm">{{ formatBytes(file.size) }}</span></td>
+					<th>
+						<div class="file-action flex items-center justify-end gap-1">
+							<button
+								class="btn btn-ghost btn-xs btn-square"
+								type="button"
+								[attr.aria-label]="'Copy link for ' + file.name"
+								(click)="act(file, 'share')"
+							>
+								<svg
+									xmlns="http://www.w3.org/2000/svg"
+									fill="none"
+									viewBox="0 0 24 24"
+									stroke-width="1.5"
+									stroke="currentColor"
+									class="h-4 w-4"
+									aria-hidden="true"
+								>
+									<path
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244"
+									/>
+								</svg>
+							</button>
+							<button
+								class="btn btn-ghost btn-xs btn-square"
+								type="button"
+								[attr.aria-label]="'Download ' + file.name"
+								(click)="act(file, 'download')"
+							>
+								<svg
+									xmlns="http://www.w3.org/2000/svg"
+									fill="none"
+									viewBox="0 0 24 24"
+									stroke-width="1.5"
+									stroke="currentColor"
+									class="h-4 w-4"
+									aria-hidden="true"
+								>
+									<path
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"
+									/>
+								</svg>
+							</button>
+							<button
+								class="btn btn-ghost btn-xs btn-square"
+								type="button"
+								[attr.aria-label]="'Delete ' + file.name"
+								(click)="act(file, 'delete')"
+							>
+								<svg
+									xmlns="http://www.w3.org/2000/svg"
+									fill="none"
+									viewBox="0 0 24 24"
+									stroke-width="1.5"
+									stroke="currentColor"
+									class="h-4 w-4"
+									aria-hidden="true"
+								>
+									<path
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"
+									/>
+								</svg>
+							</button>
+							<button
+								class="btn btn-ghost btn-xs btn-square"
+								type="button"
+								[attr.aria-label]="'Rename ' + file.name"
+								(click)="act(file, 'rename')"
+							>
+								<svg
+									xmlns="http://www.w3.org/2000/svg"
+									fill="none"
+									viewBox="0 0 24 24"
+									stroke-width="1.5"
+									stroke="currentColor"
+									class="h-4 w-4"
+									aria-hidden="true"
+								>
+									<path
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10"
+									/>
+								</svg>
+							</button>
+						</div>
+					</th>
+				</tr>
+			</tbody>
+		</table>
+	</cdk-virtual-scroll-viewport>
 </div>

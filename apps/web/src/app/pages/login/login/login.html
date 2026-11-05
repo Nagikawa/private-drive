@@ -1,34 +1,37 @@
-<div class="hero h-full bg-base-200">
-  <div class="hero-content">
-    <div class="aura aura-rainbow">
-      <div class="card w-96 bg-base-100 shadow-sm">
-        <div class="card-body">
-          <h1 class="card-title">Log in to Private Drive</h1>
-          <form novalidate (submit)="onSubmit($event)">
-            <fieldset class="fieldset">
-              <label class="label" for="password">Password</label>
-              <input
-                id="password"
-                class="input w-full"
-                type="password"
-                [formField]="loginForm.password"
-                autocomplete="current-password"
-              />
-              @if (loginForm.password().touched() && loginForm.password().invalid()) {
-                <p class="label text-error">{{ loginForm.password().errors()[0].message }}</p>
-              }
-              @if (errorMessage()) {
-                <div class="alert alert-error" role="alert">
-                  <span>{{ errorMessage() }}</span>
-                </div>
-              }
-              <button class="btn btn-primary btn-block mt-4" type="submit" [disabled]="submitting()">Log in</button>
-            </fieldset>
-          </form>
-        </div>
-      </div>
-  </div>
-  </div>
+<div class="hero bg-base-200 h-full">
+	<div class="hero-content">
+		<div class="aura aura-rainbow">
+			<div class="card bg-base-100 w-96 shadow-sm">
+				<div class="card-body">
+					<h1 class="card-title">Log in to Private Drive</h1>
+					<form novalidate (submit)="onSubmit($event)">
+						<fieldset class="fieldset">
+							<label class="label" for="password">Password</label>
+							<input
+								id="password"
+								class="input w-full"
+								type="password"
+								[formField]="loginForm.password"
+								autocomplete="current-password"
+							/>
+							@if (loginForm.password().touched() && loginForm.password().invalid()) {
+							<p class="label text-error">{{ loginForm.password().errors()[0].message }}</p>
+							} @if (errorMessage()) {
+							<div class="alert alert-error" role="alert">
+								<span>{{ errorMessage() }}</span>
+							</div>
+							}
+							<button
+								class="btn btn-primary btn-block mt-4"
+								type="submit"
+								[disabled]="submitting()"
+							>
+								Log in
+							</button>
+						</fieldset>
+					</form>
+				</div>
+			</div>
+		</div>
+	</div>
 </div>
-
-
