@@ -11,6 +11,7 @@ import * as Result from 'effect/Result';
 import { AuditLog } from '../src/audit/log.ts';
 import { AppConfig } from '../src/config.ts';
 import { Drive } from '../src/drive/drive.ts';
+import { NodeState } from '../src/state/node-store.ts';
 import { HuggingFace } from '../src/storage/huggingface.ts';
 import { R2 } from '../src/storage/r2.ts';
 import { Stores } from '../src/storage/stores.ts';
@@ -27,6 +28,7 @@ const withPlatform =
 	) =>
 	(directory: string) =>
 		effect.pipe(
+			Effect.provide(NodeState),
 			Effect.provide(NodeFileSystem.layer),
 			Effect.provide(NodePath.layer),
 			Effect.provide(FetchHttpClient.layer),

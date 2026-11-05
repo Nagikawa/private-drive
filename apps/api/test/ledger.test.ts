@@ -1,9 +1,8 @@
-import * as NodeFileSystem from '@effect/platform-node/NodeFileSystem';
-import * as NodePath from '@effect/platform-node/NodePath';
 import * as Vitest from '@effect/vitest';
 import * as Effect from 'effect/Effect';
 
 import { SessionLedger } from '../src/auth/ledger.ts';
+import { NodeState } from '../src/state/node-store.ts';
 import { configFor, tempDirectory } from './support.ts';
 
 const ledgerIn = (directory: string) =>
@@ -11,8 +10,7 @@ const ledgerIn = (directory: string) =>
 		return yield* SessionLedger;
 	}).pipe(
 		Effect.provide(SessionLedger.layer),
-		Effect.provide(NodeFileSystem.layer),
-		Effect.provide(NodePath.layer),
+		Effect.provide(NodeState),
 		Effect.provide(configFor(directory)),
 	);
 

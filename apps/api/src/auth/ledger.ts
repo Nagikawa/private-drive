@@ -2,27 +2,17 @@ import { Unauthorized, type SessionBook } from '@private-drive/model';
 import { activeSessions, pure, sessionBook } from '@private-drive/utils';
 import * as Context from 'effect/Context';
 import * as Effect from 'effect/Effect';
-import * as FileSystem from 'effect/FileSystem';
 import * as Layer from 'effect/Layer';
-import * as Path from 'effect/Path';
-import * as Predicate from 'effect/Predicate';
 import * as Redacted from 'effect/Redacted';
-import * as Result from 'effect/Result';
-import { randomUUID } from 'node:crypto';
-import { open, readFile, rm, writeFile } from 'node:fs/promises';
 
 import { AppConfig } from '../config.ts';
+import { StateStore } from '../state/store.ts';
 import { issueSession, sessionClaims, sessionLifetime } from './session.ts';
 
-// A lock held by a process that no longer exists can be removed.
-const ownerAlive = (pid: number): boolean => {
-	try {
-		process.kill(pid, 0);
-		return true;
-	} catch (cause) {
-		return Predicate.hasProperty(cause, 'code') && cause.code === 'EPERM';
-	}
-};
+const sessionsKey = 'sessions';
+
+const bookFrom = (text: string | undefined) =>
+	text === undefined ? Effect.succeed({} as SessionBook) : sessionBook(text);
 
 // Remembers which session nonces are still allowed, so logout can reject a cookie before it expires.
 export class SessionLedger extends Context.Service<
@@ -37,107 +27,33 @@ export class SessionLedger extends Context.Service<
 		SessionLedger,
 		Effect.gen(function* () {
 			const config = yield* AppConfig;
-			const fs = yield* FileSystem.FileSystem;
-			const path = yield* Path.Path;
+			const store = yield* StateStore;
 			const secret = Redacted.value(config.sessionSecret);
-			const bookPath = path.join(config.dataDir, 'sessions.json');
-			const lockPath = `${bookPath}.lock`;
-			const owner = String(process.pid);
 
-			// Creates the lock exclusively, or drops a lock whose owner process has exited.
-			const acquire = Effect.fn('SessionLedger.acquire')(function* () {
-				const deadline = Date.now() + 15_000;
-				while (Date.now() < deadline) {
-					const created = yield* Effect.tryPromise({
-						catch: (cause) => cause,
-						try: async () => {
-							const handle = await open(lockPath, 'wx');
-							await handle.writeFile(owner);
-							await handle.close();
-						},
-					}).pipe(Effect.result);
-					if (Result.isSuccess(created)) {
-						return;
-					}
-					if (
-						!(Predicate.hasProperty(created.failure, 'code') && created.failure.code === 'EEXIST')
-					) {
-						return;
-					}
-					const holder = yield* Effect.tryPromise({
-						catch: () => '',
-						try: () => readFile(lockPath, 'utf8'),
-					}).pipe(Effect.catch(() => Effect.succeed('')));
-					const pid = Number(holder);
-					if (!Number.isInteger(pid) || pid <= 0 || !ownerAlive(pid)) {
-						yield* Effect.tryPromise({
-							catch: () => undefined,
-							try: () => rm(lockPath, { force: true }),
-						}).pipe(Effect.catch(() => Effect.void));
-						continue;
-					}
-					yield* Effect.sleep('50 millis');
-				}
-			});
-
-			const release = Effect.fn('SessionLedger.release')(function* () {
-				const holder = yield* Effect.tryPromise({
-					catch: () => '',
-					try: () => readFile(lockPath, 'utf8'),
-				}).pipe(Effect.catch(() => Effect.succeed('')));
-				if (holder !== owner) {
-					return;
-				}
-				yield* Effect.tryPromise({
-					catch: () => undefined,
-					try: () => rm(lockPath, { force: true }),
-				}).pipe(Effect.catch(() => Effect.void));
-			});
-
-			const load = Effect.fn('SessionLedger.load')(function* () {
-				const exists = yield* fs.exists(bookPath).pipe(Effect.catch(() => Effect.succeed(false)));
-				if (!exists) {
-					return {};
-				}
-				const text = yield* fs
-					.readFileString(bookPath)
-					.pipe(Effect.catch(() => Effect.succeed('')));
-				return yield* sessionBook(text);
-			});
-
-			const save = Effect.fn('SessionLedger.save')(function* (book: SessionBook) {
-				yield* fs
-					.makeDirectory(path.dirname(bookPath), { recursive: true })
-					.pipe(Effect.mapError(() => 'Could not create the session directory'));
-				const temporary = `${bookPath}.${randomUUID()}.tmp`;
-				yield* Effect.tryPromise({
-					catch: () => 'Could not write the session ledger',
-					try: () => writeFile(temporary, JSON.stringify({ sessions: book })),
-				});
-				yield* fs
-					.rename(temporary, bookPath)
-					.pipe(Effect.mapError(() => 'Could not replace the session ledger'));
-			});
-
-			// Runs one ledger change while this process holds the lock.
+			// Applies one ledger change only when the stored book is still the one we read.
 			const change = <A>(use: (book: SessionBook) => readonly [SessionBook, A]) =>
-				Effect.acquireUseRelease(
-					acquire(),
-					() =>
-						Effect.gen(function* () {
-							const book = yield* load();
-							const [next, value] = use(book);
-							yield* save(next);
+				Effect.gen(function* () {
+					for (let attempt = 0; attempt < 8; attempt++) {
+						const text = yield* store.readDoc(sessionsKey);
+						const book = yield* bookFrom(text);
+						const [next, value] = use(book);
+						const swapped = yield* store.compareAndSwap(
+							sessionsKey,
+							text,
+							JSON.stringify({ sessions: next }),
+						);
+						if (swapped === 'ok') {
 							return value;
-						}),
-					() => release(),
-				);
+						}
+					}
+					return yield* Effect.fail('Could not update the session ledger');
+				});
 
 			return SessionLedger.of({
 				// Issues a signed cookie and records its nonce until the cookie's own expiry.
 				issue: (now) =>
 					change((book) => {
-						const nonce = randomUUID();
+						const nonce = crypto.randomUUID();
 						const expiresAt = now + sessionLifetime;
 						const next = pure(activeSessions(book, now), {});
 						next[nonce] = expiresAt;
@@ -152,7 +68,10 @@ export class SessionLedger extends Context.Service<
 						if (claims === undefined) {
 							return false;
 						}
-						const book = yield* load();
+						const text = yield* store
+							.readDoc(sessionsKey)
+							.pipe(Effect.catch(() => Effect.succeed(undefined)));
+						const book = yield* bookFrom(text);
 						return book[claims.nonce] === claims.expiresAt;
 					}),
 				// Drops the nonce so a copied cookie cannot be used after logout.

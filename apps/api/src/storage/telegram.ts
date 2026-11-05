@@ -8,8 +8,8 @@ import * as HttpClientResponse from 'effect/http/HttpClientResponse';
 import * as Layer from 'effect/Layer';
 import * as Redacted from 'effect/Redacted';
 import * as Schema from 'effect/Schema';
+import * as FileSystem from 'effect/FileSystem';
 import * as Stream from 'effect/Stream';
-import { openAsBlob } from 'node:fs';
 
 import { AppConfig } from '../config.ts';
 
@@ -52,6 +52,7 @@ export class Telegram extends Context.Service<
 		Telegram,
 		Effect.gen(function* () {
 			const config = yield* AppConfig;
+			const fs = yield* FileSystem.FileSystem;
 			const raw = yield* HttpClient.HttpClient;
 			const http = raw.pipe(HttpClient.filterStatusOk);
 
@@ -83,10 +84,16 @@ export class Telegram extends Context.Service<
 				const form = new FormData();
 				form.set('chat_id', config.telegram.chatId);
 				const name = (yield* splitStorageKey(key)).name;
-				const blob = yield* Effect.tryPromise({
-					catch: () => new StorageError({ message: 'Could not read the uploaded temporary file' }),
-					try: () => openAsBlob(path, { type: contentType }),
-				});
+				const bytes = yield* fs
+					.readFile(path)
+					.pipe(
+						Effect.mapError(
+							() => new StorageError({ message: 'Could not read the uploaded temporary file' }),
+						),
+					);
+				const copy = new ArrayBuffer(bytes.byteLength);
+				new Uint8Array(copy).set(bytes);
+				const blob = new Blob([copy], { type: contentType });
 				form.set('document', blob, name);
 				const result = yield* HttpClientRequest.post('/sendDocument').pipe(
 					HttpClientRequest.bodyFormData(form),

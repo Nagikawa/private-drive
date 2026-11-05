@@ -16,22 +16,40 @@ import {
 	contentTypeFromName,
 	parentFolder,
 	splitStorageKey,
+	pendingUploads,
 	unavailable,
 	uploadPartBytes,
 	uploadParts,
 } from '@private-drive/utils';
 import * as Context from 'effect/Context';
 import * as Effect from 'effect/Effect';
+import * as FileSystem from 'effect/FileSystem';
 import * as Layer from 'effect/Layer';
-import * as Path from 'effect/Path';
 import * as Predicate from 'effect/Predicate';
 import * as Redacted from 'effect/Redacted';
 import * as Result from 'effect/Result';
 import * as Stream from 'effect/Stream';
-import { createReadStream } from 'node:fs';
 
 import { AppConfig } from '../config.ts';
-import { forgetUpload, readPendingUploads, rememberUpload } from './r2-uploads.ts';
+import { StateStore } from '../state/store.ts';
+
+// The browser AWS client sometimes returns the object body as a ReadableStream without transformToWebStream.
+export const objectWebStream = (body: unknown): ReadableStream<Uint8Array> | undefined => {
+	if (
+		Predicate.isObject(body) &&
+		Predicate.hasProperty(body, 'transformToWebStream') &&
+		typeof body.transformToWebStream === 'function'
+	) {
+		const stream: unknown = body.transformToWebStream();
+		if (stream instanceof ReadableStream) {
+			return stream;
+		}
+	}
+	if (body instanceof ReadableStream) {
+		return body;
+	}
+	return undefined;
+};
 
 export class R2 extends Context.Service<
 	R2,
@@ -57,8 +75,8 @@ export class R2 extends Context.Service<
 		R2,
 		Effect.gen(function* () {
 			const config = yield* AppConfig;
-			const path = yield* Path.Path;
-			const pendingPath = path.join(config.dataDir, 'r2-uploads.json');
+			const fs = yield* FileSystem.FileSystem;
+			const store = yield* StateStore;
 			const client =
 				config.r2 === undefined
 					? undefined
@@ -70,6 +88,9 @@ export class R2 extends Context.Service<
 							endpoint: `https://${config.r2.accountId}.r2.cloudflarestorage.com`,
 							forcePathStyle: true,
 							region: 'auto',
+							// The default checksum mode replaces the body with a stream that drops transformToWebStream.
+							requestChecksumCalculation: 'WHEN_REQUIRED',
+							responseChecksumValidation: 'WHEN_REQUIRED',
 						});
 
 			// Sends one S3 command and maps SDK rejections onto the storage error the API returns.
@@ -181,43 +202,131 @@ export class R2 extends Context.Service<
 				);
 			});
 
-			// Streams a large file in parts so the process never holds the whole object in one buffer.
+			const journalKey = 'r2-uploads';
+			let swept = false;
+
+			const readRange = Effect.fn('R2.readRange')(function* (
+				filePath: string,
+				offset: number,
+				length: number,
+			) {
+				return yield* Effect.scoped(
+					Effect.gen(function* () {
+						const handle = yield* fs
+							.open(filePath)
+							.pipe(
+								Effect.mapError(
+									() => new StorageError({ message: 'Could not read the uploaded temporary file' }),
+								),
+							);
+						const output = new Uint8Array(length);
+						const chunk = new Uint8Array(1024 * 1024);
+						let filled = 0;
+						let position = BigInt(offset);
+						while (filled < length) {
+							const count = yield* handle
+								.read(chunk, { position })
+								.pipe(
+									Effect.mapError(
+										() =>
+											new StorageError({ message: 'Could not read the uploaded temporary file' }),
+									),
+								);
+							if (count === 0) {
+								return yield* new StorageError({
+									message: 'Could not read the uploaded temporary file',
+								});
+							}
+							const take = Math.min(count, length - filled);
+							output.set(chunk.subarray(0, take), filled);
+							filled += take;
+							position += BigInt(take);
+						}
+						return output;
+					}),
+				);
+			});
+
+			// Keeps unfinished multipart ids so a later upload can abort them after a crash.
+			const updateJournal = Effect.fn('R2.updateJournal')(function* (
+				use: (
+					rows: ReadonlyArray<{ readonly key: string; readonly uploadId: string }>,
+				) => ReadonlyArray<{ readonly key: string; readonly uploadId: string }>,
+			) {
+				for (let attempt = 0; attempt < 8; attempt++) {
+					const text = yield* store
+						.readDoc(journalKey)
+						.pipe(
+							Effect.mapError(
+								() => new StorageError({ message: 'Could not record the R2 upload' }),
+							),
+						);
+					const rows = text === undefined ? [] : yield* pendingUploads(text);
+					const swapped = yield* store
+						.compareAndSwap(journalKey, text, JSON.stringify(use(rows)))
+						.pipe(
+							Effect.mapError(
+								() => new StorageError({ message: 'Could not record the R2 upload' }),
+							),
+						);
+					if (swapped === 'ok') {
+						return;
+					}
+				}
+				return yield* new StorageError({ message: 'Could not record the R2 upload' });
+			});
+
+			const sweep = Effect.fn('R2.sweep')(function* () {
+				if (swept || client === undefined || config.r2 === undefined) {
+					return;
+				}
+				swept = true;
+				const text = yield* store
+					.readDoc(journalKey)
+					.pipe(Effect.catch(() => Effect.succeed(undefined)));
+				const rows = text === undefined ? [] : yield* pendingUploads(text);
+				for (const upload of rows) {
+					const aborted = yield* send(
+						new AbortMultipartUploadCommand({
+							Bucket: config.r2.bucket,
+							Key: upload.key,
+							UploadId: upload.uploadId,
+						}),
+					).pipe(Effect.result);
+					const gone =
+						Result.isFailure(aborted) &&
+						aborted.failure.message.toLowerCase().includes('nosuchupload');
+					if (Result.isSuccess(aborted) || gone) {
+						yield* updateJournal((current) =>
+							current.filter((item) => item.uploadId !== upload.uploadId),
+						).pipe(Effect.ignore);
+					}
+				}
+			});
+
+			// Reads the temporary file in parts so one request never holds the whole object.
 			const putFile = Effect.fn('R2.putFile')(function* (
 				key: string,
-				path: string,
+				filePath: string,
 				size: number,
 				contentType: string,
 			) {
 				if (config.r2 === undefined) {
 					return yield* unavailable('r2');
 				}
+				yield* sweep();
 				const bucket = config.r2.bucket;
 				const parts = yield* uploadParts(size, yield* uploadPartBytes(size));
 				if (parts.length <= 1) {
-					if (size === 0) {
-						yield* send(
-							new PutObjectCommand({
-								Body: new Uint8Array(),
-								Bucket: bucket,
-								ContentType: contentType,
-								Key: key,
-							}),
-						);
-						return;
-					}
-					yield* Effect.acquireUseRelease(
-						Effect.sync(() => createReadStream(path)),
-						(body) =>
-							send(
-								new PutObjectCommand({
-									Body: body,
-									Bucket: bucket,
-									ContentLength: size,
-									ContentType: contentType,
-									Key: key,
-								}),
-							),
-						(body) => Effect.sync(() => body.destroy()),
+					const body = size === 0 ? new Uint8Array() : yield* readRange(filePath, 0, size);
+					yield* send(
+						new PutObjectCommand({
+							Body: body,
+							Bucket: bucket,
+							ContentLength: size,
+							ContentType: contentType,
+							Key: key,
+						}),
 					);
 					return;
 				}
@@ -232,10 +341,7 @@ export class R2 extends Context.Service<
 				if (uploadId === undefined) {
 					return yield* new StorageError({ message: 'R2 did not start the upload' });
 				}
-				yield* Effect.tryPromise({
-					catch: () => new StorageError({ message: 'Could not record the R2 upload' }),
-					try: () => rememberUpload(pendingPath, { key, uploadId }),
-				});
+				yield* updateJournal((rows) => [...rows, { key, uploadId }]);
 				const abort = send(
 					new AbortMultipartUploadCommand({
 						Bucket: bucket,
@@ -243,32 +349,22 @@ export class R2 extends Context.Service<
 						UploadId: uploadId,
 					}),
 				).pipe(Effect.ignore);
-				const forget = Effect.tryPromise({
-					catch: () => undefined,
-					try: () => forgetUpload(pendingPath, uploadId),
-				}).pipe(Effect.ignore);
+				const forget = updateJournal((rows) =>
+					rows.filter((item) => item.uploadId !== uploadId),
+				).pipe(Effect.ignore);
 				yield* Effect.gen(function* () {
 					const completed: Array<{ readonly ETag: string; readonly PartNumber: number }> = [];
 					for (const part of parts) {
-						const output = yield* Effect.acquireUseRelease(
-							Effect.sync(() =>
-								createReadStream(path, {
-									end: part.offset + part.length - 1,
-									start: part.offset,
-								}),
-							),
-							(body) =>
-								send<{ readonly ETag?: string }>(
-									new UploadPartCommand({
-										Body: body,
-										Bucket: bucket,
-										ContentLength: part.length,
-										Key: key,
-										PartNumber: part.number,
-										UploadId: uploadId,
-									}),
-								),
-							(body) => Effect.sync(() => body.destroy()),
+						const body = yield* readRange(filePath, part.offset, part.length);
+						const output = yield* send<{ readonly ETag?: string }>(
+							new UploadPartCommand({
+								Body: body,
+								Bucket: bucket,
+								ContentLength: part.length,
+								Key: key,
+								PartNumber: part.number,
+								UploadId: uploadId,
+							}),
 						);
 						if (output.ETag === undefined) {
 							return yield* new StorageError({ message: 'R2 did not accept an upload part' });
@@ -295,15 +391,15 @@ export class R2 extends Context.Service<
 				if (config.r2 === undefined) {
 					return yield* unavailable('r2');
 				}
-				const output = yield* send<{
-					readonly Body?: { readonly transformToWebStream: () => ReadableStream<Uint8Array> };
-				}>(new GetObjectCommand({ Bucket: config.r2.bucket, Key: key }));
-				const body = output.Body;
-				if (body === undefined) {
+				const output = yield* send<{ readonly Body?: unknown }>(
+					new GetObjectCommand({ Bucket: config.r2.bucket, Key: key }),
+				);
+				const web = objectWebStream(output.Body);
+				if (web === undefined) {
 					return yield* new StorageError({ message: 'R2 returned no file content' });
 				}
 				return Stream.fromReadableStream({
-					evaluate: () => body.transformToWebStream(),
+					evaluate: () => web,
 					onError: () => new StorageError({ message: 'R2 download failed' }),
 				});
 			});
@@ -359,39 +455,6 @@ export class R2 extends Context.Service<
 				yield* send(new HeadBucketCommand({ Bucket: config.r2.bucket }));
 				return `Connected ${config.r2.bucket}`;
 			});
-
-			// A crash leaves the multipart id on disk. Abort it before the server accepts another upload.
-			if (client !== undefined && config.r2 !== undefined) {
-				const bucket = config.r2.bucket;
-				const pending = yield* Effect.tryPromise({
-					catch: () => [] as ReadonlyArray<{ readonly key: string; readonly uploadId: string }>,
-					try: () => readPendingUploads(pendingPath),
-				}).pipe(
-					Effect.catch(() =>
-						Effect.succeed(
-							[] as ReadonlyArray<{ readonly key: string; readonly uploadId: string }>,
-						),
-					),
-				);
-				for (const upload of pending) {
-					const aborted = yield* send(
-						new AbortMultipartUploadCommand({
-							Bucket: bucket,
-							Key: upload.key,
-							UploadId: upload.uploadId,
-						}),
-					).pipe(Effect.result);
-					const missing =
-						Result.isFailure(aborted) &&
-						aborted.failure.message.toLowerCase().includes('nosuchupload');
-					if (Result.isSuccess(aborted) || missing) {
-						yield* Effect.tryPromise({
-							catch: () => undefined,
-							try: () => forgetUpload(pendingPath, upload.uploadId),
-						}).pipe(Effect.ignore);
-					}
-				}
-			}
 
 			return R2.of({
 				configured: config.r2 !== undefined,

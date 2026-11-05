@@ -1,11 +1,10 @@
-import * as NodeFileSystem from '@effect/platform-node/NodeFileSystem';
-import * as NodePath from '@effect/platform-node/NodePath';
 import * as Vitest from '@effect/vitest';
 import * as Effect from 'effect/Effect';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { AuditLog } from '../src/audit/log.ts';
+import { NodeState } from '../src/state/node-store.ts';
 import { configFor, tempDirectory } from './support.ts';
 
 Vitest.describe('AuditLog', () => {
@@ -17,8 +16,7 @@ Vitest.describe('AuditLog', () => {
 				return yield* AuditLog;
 			}).pipe(
 				Effect.provide(AuditLog.layer),
-				Effect.provide(NodeFileSystem.layer),
-				Effect.provide(NodePath.layer),
+				Effect.provide(NodeState),
 				Effect.provide(configFor(directory)),
 			);
 			yield* audit.record('rename', 'a\nb' + 'x'.repeat(400));

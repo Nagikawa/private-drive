@@ -1,4 +1,3 @@
-import * as NodeFileSystem from '@effect/platform-node/NodeFileSystem';
 import * as NodePath from '@effect/platform-node/NodePath';
 import * as Vitest from '@effect/vitest';
 import { FileEntry, OpenUpload } from '@private-drive/model';
@@ -8,6 +7,7 @@ import * as Result from 'effect/Result';
 
 import { Drive } from '../src/drive/drive.ts';
 import { Uploads } from '../src/drive/uploads.ts';
+import { NodeState } from '../src/state/node-store.ts';
 import { configFor, tempDirectory } from './support.ts';
 
 const saved: Array<string> = [];
@@ -41,7 +41,7 @@ Vitest.describe('Uploads', () => {
 			}).pipe(
 				Effect.provide(Uploads.layer),
 				Effect.provide(Layer.succeed(Drive, drive)),
-				Effect.provide(NodeFileSystem.layer),
+				Effect.provide(NodeState),
 				Effect.provide(NodePath.layer),
 				Effect.provide(configFor(directory)),
 			);
