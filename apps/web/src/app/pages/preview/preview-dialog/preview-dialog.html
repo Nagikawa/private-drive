@@ -1,26 +1,14 @@
 <dialog class="modal" #dialog>
-  @if (entry(); as entry) {
-    <div class="modal-box w-11/12 max-w-5xl">
-      <h3 class="text-lg font-bold">{{ entry.name }}</h3>
-      <p class="py-4 text-sm">{{ entry.contentType }} · {{ sizeLabel(entry) }}</p>
-      @if (isImage(entry)) {
-        <img class="max-h-[70vh] w-full object-contain" [src]="contentUrl(entry)" [alt]="entry.name" />
-      } @else if (isVideo(entry)) {
-        <video class="max-h-[70vh] w-full" controls [src]="contentUrl(entry)"></video>
-      } @else if (isAudio(entry)) {
-        <audio class="w-full" controls [src]="contentUrl(entry)"></audio>
-      } @else if (pdfUrl(entry); as pdf) {
-        <iframe class="h-[70vh] w-full" [src]="pdf" [title]="entry.name"></iframe>
-      } @else if (isText(entry)) {
-        <pre class="overflow-auto whitespace-pre-wrap">{{ text() }}</pre>
-      } @else {
-        <a class="link" [href]="contentUrl(entry)" target="_blank" rel="noopener">Open {{ entry.name }}</a>
-      }
-      <div class="modal-action">
-        <form method="dialog">
-          <button class="btn" type="submit">Close</button>
-        </form>
-      </div>
-    </div>
-  }
+	@if (entry(); as entry) {
+	<div class="modal-box w-11/12 max-w-5xl">
+		<h3 class="text-lg font-bold">{{ entry.name }}</h3>
+		<p class="py-4 text-sm">{{ entry.contentType }} · {{ sizeLabel(entry) }}</p>
+		<img class="max-h-[70vh] w-full object-contain" [src]="contentUrl(entry)" [alt]="entry.name" />
+		<div class="modal-action">
+			<form method="dialog">
+				<button class="btn" type="submit">Close</button>
+			</form>
+		</div>
+	</div>
+	}
 </dialog>

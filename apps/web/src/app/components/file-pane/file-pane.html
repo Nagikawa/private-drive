@@ -1,170 +1,269 @@
 @if (showCrumbs()) {
-  <app-breadcrumbs class="shrink-0" [crumbs]="crumbs()" (opened)="opened.emit($event)" />
+<app-breadcrumbs class="shrink-0" [crumbs]="crumbs()" (opened)="opened.emit($event)" />
 }
 <div class="flex shrink-0 flex-wrap items-center gap-2">
-  <fieldset class="fieldset max-w-md">
-    <input placeholder="Search files..." id="file-search" class="input w-full" [value]="search()" (input)="onSearch($event)" />
-  </fieldset>
-  @if (listing(); as listing) {
-    @if (listing.files.length > 0) {
-      <label class="label w-fit">
-        <input #allBox type="checkbox" class="checkbox checkbox-sm" [checked]="allSelected()" (change)="toggledAll.emit(checkedOf($event))" />
-        Select all
-      </label>
-    }
-  }
-  <div class="ml-auto flex flex-nowrap items-center gap-2">
-    <app-folder-actions
-      [deleteDisabled]="deleteDisabled()"
-      [uploadDisabled]="uploading()"
-      (chosen)="onFolderAction($event)"
-    />
-    <input #fileInput class="hidden" type="file" multiple aria-hidden="true" tabindex="-1" (change)="onFiles($event)" />
-    <select class="select select-sm w-28! shrink-0" aria-label="Sort" [value]="sort()" (change)="onSort($event)">
-      <option value="name-asc">Name</option>
-      <option value="name-desc">Name, Z to A</option>
-      <option value="created-desc">Newest</option>
-      <option value="created-asc">Oldest</option>
-      <option value="size-desc">Largest</option>
-      <option value="size-asc">Smallest</option>
-      <option value="type-asc">Type</option>
-      <option value="type-desc">Type, Z to A</option>
-    </select>
-    <div class="join shrink-0" role="group" aria-label="View">
-      <button
-        class="join-item btn btn-sm btn-square transition-none!"
-        type="button"
-        aria-label="Grid"
-        [class.btn-primary]="view() === 'grid'"
-        (click)="setView('grid')"
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="h-4 w-4" aria-hidden="true">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
-        </svg>
-      </button>
-      <button
-        class="join-item btn btn-sm btn-square transition-none!"
-        type="button"
-        aria-label="List"
-        [class.btn-primary]="view() === 'list'"
-        (click)="setView('list')"
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="h-4 w-4" aria-hidden="true">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
-        </svg>
-      </button>
-    </div>
-  </div>
+	@if (source() !== 'telegram') {
+	<fieldset class="fieldset max-w-md">
+		<input
+			placeholder="Search files..."
+			id="file-search"
+			class="input w-full"
+			[value]="search()"
+			(input)="onSearch($event)"
+		/>
+	</fieldset>
+	}
+	@if (listing(); as listing) { @if (listing.files.length > 0) {
+	<label class="label w-fit">
+		<input
+			#allBox
+			type="checkbox"
+			class="checkbox checkbox-sm"
+			[checked]="allSelected()"
+			(change)="toggledAll.emit(checkedOf($event))"
+		/>
+		Select all
+	</label>
+	} }
+	<div class="ml-auto flex flex-nowrap items-center gap-2">
+		<app-folder-actions
+			[deleteDisabled]="deleteDisabled()"
+			[uploadDisabled]="uploading()"
+			[uploadOnly]="source() === 'telegram'"
+			(chosen)="onFolderAction($event)"
+		/>
+		<input
+			#fileInput
+			class="hidden"
+			type="file"
+			multiple
+			aria-hidden="true"
+			tabindex="-1"
+			(change)="onFiles($event)"
+		/>
+		@if (source() !== 'telegram') {
+		<select
+			class="select select-sm w-28! shrink-0"
+			aria-label="Sort"
+			[value]="sort()"
+			(change)="onSort($event)"
+		>
+			<option value="name-asc">Name</option>
+			<option value="name-desc">Name, Z to A</option>
+			<option value="created-desc">Newest</option>
+			<option value="created-asc">Oldest</option>
+			<option value="size-desc">Largest</option>
+			<option value="size-asc">Smallest</option>
+			<option value="type-asc">Type</option>
+			<option value="type-desc">Type, Z to A</option>
+		</select>
+		<div class="join shrink-0" role="group" aria-label="View">
+			<button
+				class="join-item btn btn-sm btn-square transition-none!"
+				type="button"
+				aria-label="Grid"
+				[class.btn-primary]="view() === 'grid'"
+				(click)="setView('grid')"
+			>
+				<svg
+					xmlns="http://www.w3.org/2000/svg"
+					fill="none"
+					viewBox="0 0 24 24"
+					stroke-width="1.5"
+					stroke="currentColor"
+					class="h-4 w-4"
+					aria-hidden="true"
+				>
+					<path
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z"
+					/>
+				</svg>
+			</button>
+			<button
+				class="join-item btn btn-sm btn-square transition-none!"
+				type="button"
+				aria-label="List"
+				[class.btn-primary]="view() === 'list'"
+				(click)="setView('list')"
+			>
+				<svg
+					xmlns="http://www.w3.org/2000/svg"
+					fill="none"
+					viewBox="0 0 24 24"
+					stroke-width="1.5"
+					stroke="currentColor"
+					class="h-4 w-4"
+					aria-hidden="true"
+				>
+					<path
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5"
+					/>
+				</svg>
+			</button>
+		</div>
+		} @else if (chatUrl() !== '') {
+		<a role="button" class="btn btn-sm" target="_blank" rel="noopener noreferrer" [href]="chatUrl()"
+			>View uploaded files</a
+		>
+		}
+	</div>
 </div>
 <div class="flex min-h-0 flex-1 flex-col overflow-hidden" (click)="closeCardMenu($event)">
-  @if (uploading()) {
-    <progress class="progress w-full" aria-label="Upload progress"></progress>
-  }
-  @if (uploadStatus()) {
-    <div class="alert" role="status">
-      <span>{{ uploadStatus() }}</span>
-    </div>
-  }
-  @if (error()) {
-    <div class="alert alert-error" role="alert">
-      <span>{{ error() }}</span>
-    </div>
-  } @else if (!listing()) {
-    <progress class="progress w-full" aria-label="Loading files"></progress>
-  } @else {
-    @if (listing()!.truncated) {
-      <div class="alert alert-warning">
-        <span>The list is truncated. Open a folder or search to narrow it.</span>
-      </div>
-    }
-    @if (listing()!.files.length === 0) {
-      <div class="alert">
-        <span>This folder is empty.</span>
-      </div>
-    } @else if (view() === 'grid') {
-      <cdk-virtual-scroll-viewport
-        class="file-grid min-h-0 w-full flex-1"
-        [itemSize]="gridRowSize"
-        [minBufferPx]="gridRowSize"
-        [maxBufferPx]="gridRowSize * 4"
-        [style.--card-w.px]="cardWidth"
-        [style.--card-h.px]="cardHeight"
-        [style.--grid-gap.px]="gridGap"
-        [style.--grid-row.px]="gridRowSize"
-      >
-        <div
-          *cdkVirtualFor="let row of gridRows(); trackBy: trackGridRow"
-          class="box-border flex items-start"
-          [style.height.px]="gridRowSize"
-          [style.padding-bottom.px]="gridGap"
-          [style.column-gap.px]="gridGap"
-        >
-          @for (file of row; track file.id) {
-            <div
-              class="dropdown dropdown-end shrink-0"
-              [class.dropdown-open]="cardMenuId() === file.id"
-              [style.width.px]="cardWidth"
-              [style.height.px]="cardHeight"
-              (contextmenu)="openCardMenu($event, file.id)"
-            >
-              <div
-                class="card bg-base-100 card-border h-full w-full"
-                draggable="true"
-                (mousedown)="rememberDragOrigin($event)"
-                (dragstart)="onFileDragStart($event, file.id)"
-                (dragend)="onFileDragEnd()"
-              >
-                <figure class="min-h-0 flex-1">
-                  @if (file.image) {
-                    <img class="h-full w-full object-contain" draggable="false" [src]="contentUrl()(file.id)" [alt]="file.name" />
-                  }
-                </figure>
-                <div class="card-body grow-0 flex-row flex-nowrap items-center gap-2 p-2">
-                  <h2 class="card-title min-w-0 flex-1 truncate">
-                    <button class="btn btn-ghost btn-sm block w-full min-w-0 truncate text-start" type="button" draggable="true" (click)="preview(file)">{{ file.name }}</button>
-                  </h2>
-                  <div class="card-actions flex-nowrap shrink-0 items-center">
-                    <label class="label">
-                      <input
-                        type="checkbox"
-                        class="checkbox"
-                        [checked]="selected().includes(file.id)"
-                        [attr.aria-label]="'Select ' + file.name"
-                        (change)="toggle(file.id, checkedOf($event))"
-                      />
-                    </label>
-                  </div>
-                </div>
-              </div>
-              <ul tabindex="0" class="dropdown-content menu bg-base-100 rounded-box z-1 w-40 p-2 shadow-sm" (contextmenu)="$event.preventDefault()">
-                <li><button type="button" (click)="act(file, 'download')">Download</button></li>
-                <li><button type="button" (click)="act(file, 'share')">Copy link</button></li>
-                <li><button type="button" (click)="act(file, 'delete')">Delete</button></li>
-                <li><button type="button" (click)="act(file, 'rename')">Rename</button></li>
-              </ul>
-            </div>
-          }
-        </div>
-      </cdk-virtual-scroll-viewport>
-    } @else {
-      <app-file-table
-        class="min-h-0 flex-1"
-        [files]="listing()!.files"
-        [selected]="selected()"
-        (toggled)="toggle($event.id, $event.checked)"
-        (previewed)="preview($event)"
-        (acted)="act($event.file, $event.action)"
-        (pressed)="rememberDragOrigin($event)"
-        (dragStarted)="onFileDragStart($event.event, $event.id)"
-        (dragEnded)="onFileDragEnd()"
-      />
-    }
-    @if (hasPrev() || hasNext()) {
-      <div class="join shrink-0" role="navigation" aria-label="Pages">
-        <button class="join-item btn btn-sm" type="button" [class.btn-disabled]="!hasPrev()" [disabled]="!hasPrev()" (click)="paged.emit('prev')">«</button>
-        <button class="join-item btn btn-sm btn-disabled" type="button" disabled>Page {{ page() }}</button>
-        <button class="join-item btn btn-sm" type="button" [class.btn-disabled]="!hasNext()" [disabled]="!hasNext()" (click)="paged.emit('next')">»</button>
-      </div>
-    }
-  }
+	@if (uploading()) {
+	<progress class="progress w-full" aria-label="Upload progress"></progress>
+	} @if (uploadStatus()) {
+	<div class="alert" role="status">
+		<span>{{ uploadStatus() }}</span>
+	</div>
+	} @if (error()) {
+	<div class="alert alert-error" role="alert">
+		<span>{{ error() }}</span>
+	</div>
+	} @else if (!listing()) {
+	<progress class="progress w-full" aria-label="Loading files"></progress>
+	} @else { @if (listing()!.truncated) {
+	<div class="alert alert-warning">
+		<span>The list is truncated. Open a folder or search to narrow it.</span>
+	</div>
+	} @if (listing()!.files.length === 0) {
+	<div class="alert">
+		<span
+			>{{ listing()!.source === 'telegram' ? 'Telegram does not keep a file list.' : 'This folder is
+			empty.' }}</span
+		>
+	</div>
+	} @else if (view() === 'grid') {
+	<cdk-virtual-scroll-viewport
+		class="file-grid min-h-0 w-full flex-1"
+		[itemSize]="gridRowSize"
+		[minBufferPx]="gridRowSize"
+		[maxBufferPx]="gridRowSize * 4"
+		[style.--card-w.px]="cardWidth"
+		[style.--card-h.px]="cardHeight"
+		[style.--grid-gap.px]="gridGap"
+		[style.--grid-row.px]="gridRowSize"
+	>
+		<div
+			*cdkVirtualFor="let row of gridRows(); trackBy: trackGridRow"
+			class="box-border flex items-start"
+			[style.height.px]="gridRowSize"
+			[style.padding-bottom.px]="gridGap"
+			[style.column-gap.px]="gridGap"
+		>
+			@for (file of row; track file.id) {
+			<div
+				class="dropdown dropdown-end shrink-0"
+				[class.dropdown-open]="cardMenuId() === file.id"
+				[style.width.px]="cardWidth"
+				[style.height.px]="cardHeight"
+				(contextmenu)="openCardMenu($event, file.id)"
+			>
+				<div
+					class="card bg-base-100 card-border h-full w-full"
+					draggable="true"
+					(mousedown)="rememberDragOrigin($event)"
+					(dragstart)="onFileDragStart($event, file.id)"
+					(dragend)="onFileDragEnd()"
+				>
+					<figure class="min-h-0 flex-1">
+						@if (file.image) {
+						<img
+							class="h-full w-full object-contain"
+							draggable="false"
+							[src]="contentUrl()(file.id)"
+							[alt]="file.name"
+						/>
+						} @else if (isVideo(file)) {
+						<app-video-frame
+							[name]="file.name"
+							[url]="contentUrl()(file.id)"
+							[mark]="extensionLabel(file.name)"
+						/>
+						} @else if (extensionLabel(file.name); as mark) {
+						<span
+							aria-hidden="true"
+							class="pointer-events-none max-w-full min-w-0 truncate px-3 text-center text-5xl leading-none font-semibold tracking-widest select-none"
+							>{{ mark }}</span
+						>
+						}
+					</figure>
+					<div class="card-body grow-0 flex-row flex-nowrap items-center gap-2 p-2">
+						<h2 class="card-title min-w-0 flex-1 truncate">
+							<button
+								class="btn btn-ghost btn-sm block w-full min-w-0 truncate text-start"
+								type="button"
+								draggable="true"
+								(click)="preview(file)"
+							>
+								{{ file.name }}
+							</button>
+						</h2>
+						<div class="card-actions shrink-0 flex-nowrap items-center">
+							<label class="label">
+								<input
+									type="checkbox"
+									class="checkbox"
+									[checked]="selected().includes(file.id)"
+									[attr.aria-label]="'Select ' + file.name"
+									(change)="toggle(file.id, checkedOf($event))"
+								/>
+							</label>
+						</div>
+					</div>
+				</div>
+				<ul
+					tabindex="0"
+					class="dropdown-content menu bg-base-100 rounded-box z-1 w-40 p-2 shadow-sm"
+					(contextmenu)="$event.preventDefault()"
+				>
+					<li><button type="button" (click)="act(file, 'download')">Download</button></li>
+					<li><button type="button" (click)="act(file, 'share')">Copy link</button></li>
+					<li><button type="button" (click)="act(file, 'delete')">Delete</button></li>
+					<li><button type="button" (click)="act(file, 'rename')">Rename</button></li>
+				</ul>
+			</div>
+			}
+		</div>
+	</cdk-virtual-scroll-viewport>
+	} @else {
+	<app-file-table
+		class="min-h-0 flex-1"
+		[files]="listing()!.files"
+		[selected]="selected()"
+		(toggled)="toggle($event.id, $event.checked)"
+		(previewed)="preview($event)"
+		(acted)="act($event.file, $event.action)"
+		(pressed)="rememberDragOrigin($event)"
+		(dragStarted)="onFileDragStart($event.event, $event.id)"
+		(dragEnded)="onFileDragEnd()"
+	/>
+	} @if (hasPrev() || hasNext()) {
+	<div class="join shrink-0" role="navigation" aria-label="Pages">
+		<button
+			class="join-item btn btn-sm"
+			type="button"
+			[class.btn-disabled]="!hasPrev()"
+			[disabled]="!hasPrev()"
+			(click)="paged.emit('prev')"
+		>
+			«
+		</button>
+		<button class="join-item btn btn-sm btn-disabled" type="button" disabled>
+			Page {{ page() }}
+		</button>
+		<button
+			class="join-item btn btn-sm"
+			type="button"
+			[class.btn-disabled]="!hasNext()"
+			[disabled]="!hasNext()"
+			(click)="paged.emit('next')"
+		>
+			»
+		</button>
+	</div>
+	} }
 </div>

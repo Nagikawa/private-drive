@@ -1,47 +1,49 @@
 <section class="flex min-h-0 flex-1 flex-col" aria-labelledby="files-heading">
-  <div class="flex min-h-0 flex-1 flex-col gap-4 md:flex-row">
-    @if (showFolderTree()) {
-      <app-folder-tree
-        [nodes]="tree()"
-        [folder]="folder()"
-        [dropTarget]="dropTarget()"
-        (opened)="openFolder($event)"
-        (draggedOver)="onFolderDragOver($event.event, $event.path)"
-        (draggedLeave)="onFolderDragLeave($event.event, $event.path)"
-        (dropped)="onFolderDrop($event.event, $event.path)"
-      />
-    }
-    <app-file-pane
-      [crumbs]="crumbs()"
-      [showCrumbs]="showFolderTree()"
-      [search]="search()"
-      [sort]="sort()"
-      [page]="state().page"
-      [hasPrev]="state().hasPrev"
-      [hasNext]="state().hasNext"
-      [listing]="state().listing"
-      [error]="state().error"
-      [selected]="selected()"
-      [deleteDisabled]="!hasSelection()"
-      [uploading]="uploading()"
-      [uploadStatus]="statusLine()"
-      [contentUrl]="contentUrl"
-      (searched)="search.set($event)"
-      (sorted)="setSort($event)"
-      (paged)="turnPage($event)"
-      (opened)="openFolder($event)"
-      (toggled)="toggle($event.id, $event.checked)"
-      (toggledAll)="toggleAll($event)"
-      (folderAction)="onFolderAction($event)"
-      (filesChosen)="uploadFiles($event)"
-      (previewed)="preview($event)"
-      (acted)="onFileAction($event.file, $event.action)"
-      (dragStarted)="onDragStarted($event)"
-      (dragEnded)="onDragEnded()"
-    />
-  </div>
-  <app-confirm-delete (closed)="onConfirmed($event)" />
-  <app-folder-prompt (named)="onFolderNamed($event)" />
-  <app-move-dialog (moved)="onMoved()" />
-  <app-preview-dialog />
+	<div class="flex min-h-0 flex-1 flex-col gap-4 md:flex-row">
+		@if (showFolderTree()) {
+		<app-folder-tree
+			[nodes]="tree()"
+			[folder]="folder()"
+			[dropTarget]="dropTarget()"
+			(opened)="openFolder($event)"
+			(draggedOver)="onFolderDragOver($event.event, $event.path)"
+			(draggedLeave)="onFolderDragLeave($event.event, $event.path)"
+			(dropped)="onFolderDrop($event.event, $event.path)"
+		/>
+		}
+		<app-file-pane
+			[crumbs]="crumbs()"
+			[showCrumbs]="showFolderTree()"
+			[search]="search()"
+			[sort]="sort()"
+			[page]="state().page"
+			[hasPrev]="state().hasPrev"
+			[hasNext]="state().hasNext"
+			[listing]="state().listing"
+			[error]="state().error"
+			[selected]="selected()"
+			[deleteDisabled]="!hasSelection()"
+			[uploading]="uploading()"
+			[uploadStatus]="statusLine()"
+			[contentUrl]="contentUrl"
+			[source]="workspace.source()"
+			[chatUrl]="chatUrl()"
+			(searched)="search.set($event)"
+			(sorted)="setSort($event)"
+			(paged)="turnPage($event)"
+			(opened)="openFolder($event)"
+			(toggled)="toggle($event.id, $event.checked)"
+			(toggledAll)="toggleAll($event)"
+			(folderAction)="onFolderAction($event)"
+			(filesChosen)="uploadFiles($event)"
+			(previewed)="preview($event)"
+			(acted)="onFileAction($event.file, $event.action)"
+			(dragStarted)="onDragStarted($event)"
+			(dragEnded)="onDragEnded()"
+		/>
+	</div>
+	<app-confirm-delete (closed)="onConfirmed($event)" />
+	<app-folder-prompt (named)="onFolderNamed($event)" />
+	<app-move-dialog (moved)="onMoved()" />
+	<app-preview-dialog />
 </section>
