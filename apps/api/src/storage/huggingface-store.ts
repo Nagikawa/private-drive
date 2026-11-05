@@ -14,9 +14,9 @@ export const huggingfaceStore = (huggingface: HuggingFace["Service"]): FileStore
   list: (folder, recursive) => huggingface.list(folder, recursive),
   open: (storageKey) => huggingface.open(storageKey),
   putFile: (key, path, size) =>
-    huggingface.putFile(key, path, size).pipe(
-      Effect.as({ storageKey: key, telegramMessageId: undefined }),
-    ),
+    huggingface
+      .putFile(key, path, size)
+      .pipe(Effect.as({ storageKey: key, telegramMessageId: undefined })),
   putMarker: (folder) => huggingface.put(`${folder}/${keepName}`, new Uint8Array()),
   relocate: (fromKey, toKey) => {
     if (fromKey === toKey) {

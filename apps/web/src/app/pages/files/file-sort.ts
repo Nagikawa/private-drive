@@ -20,7 +20,9 @@ export const fileSorts: ReadonlyArray<FileSort> = [
 ];
 
 // The select value is one token. The API wants the field and the direction separately.
-export const parseFileSort = (value: FileSort): { sort: 'name' | 'size' | 'created' | 'type'; order: 'asc' | 'desc' } => {
+export const parseFileSort = (
+  value: FileSort,
+): { sort: 'name' | 'size' | 'created' | 'type'; order: 'asc' | 'desc' } => {
   const [sort, order] = value.split('-');
   if (
     (sort === 'name' || sort === 'size' || sort === 'created' || sort === 'type') &&
@@ -31,4 +33,5 @@ export const parseFileSort = (value: FileSort): { sort: 'name' | 'size' | 'creat
   return { sort: 'name', order: 'asc' };
 };
 
-export const isFileSort = (value: string): value is FileSort => fileSorts.some((item) => item === value);
+export const isFileSort = (value: string): value is FileSort =>
+  fileSorts.some((item) => item === value);

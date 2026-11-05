@@ -10,5 +10,6 @@ describe('file sort', () => {
       expect(parseFileSort('type-asc')).toEqual({ sort: 'type', order: 'asc' });
       expect(isFileSort('size-desc')).toBe(true);
       expect(isFileSort('recent')).toBe(false);
-    }));
+    }),
+  );
 });

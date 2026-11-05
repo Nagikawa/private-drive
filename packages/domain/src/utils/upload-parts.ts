@@ -24,7 +24,12 @@ export interface UploadPart {
 
 // Splits a file into contiguous 1-based ranges. An empty or invalid size uploads as no parts.
 export const uploadParts = (fileSize: number, partBytes: number): ReadonlyArray<UploadPart> => {
-  if (!Number.isFinite(fileSize) || fileSize <= 0 || !Number.isFinite(partBytes) || partBytes <= 0) {
+  if (
+    !Number.isFinite(fileSize) ||
+    fileSize <= 0 ||
+    !Number.isFinite(partBytes) ||
+    partBytes <= 0
+  ) {
     return []
   }
   const parts: Array<UploadPart> = []

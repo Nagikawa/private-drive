@@ -30,7 +30,7 @@ export class MoveDialog {
   // Builds the breadcrumb trail for the destination browser.
   protected readonly crumbs = computed(() => pure(folderCrumbs(this.location()), []));
 
-// Loads the current folder's folders so the dialog can browse destinations.
+  // Loads the current folder's folders so the dialog can browse destinations.
   protected readonly state = toSignal(
     this.location$.pipe(
       switchMap((folder) => {
@@ -43,7 +43,11 @@ export class MoveDialog {
             this.api.list({ source: current.source, folder, kind: 'all', recursive: 'false' }).pipe(
               Effect.map((listing) => ({ error: '', folders: listing.folders, ready: true })),
               Effect.catch((error) =>
-                Effect.succeed({ error: error.message, folders: [] as Listing['folders'], ready: true }),
+                Effect.succeed({
+                  error: error.message,
+                  folders: [] as Listing['folders'],
+                  ready: true,
+                }),
               ),
             ),
           )

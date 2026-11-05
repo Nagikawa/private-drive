@@ -48,7 +48,9 @@ const stored = <A>(task: Effect.Effect<A, PreferenceFailure>, fallback: A): A =>
 export class Workspace {
   private readonly router = inject(Router);
   readonly source = signal<SourceId>(stored(readSource(), 'r2'));
-  readonly dark = signal(stored(readStored(themeKey).pipe(Effect.map((value) => value === 'dark')), false));
+  readonly dark = signal(
+    stored(readStored(themeKey).pipe(Effect.map((value) => value === 'dark')), false),
+  );
 
   // Writes the theme and source whenever those signals change, including the first read.
   private readonly persist = effect(() => {

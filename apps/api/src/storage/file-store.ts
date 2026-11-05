@@ -29,6 +29,9 @@ export interface FileStore {
   ): Effect.Effect<PlacedObject, StorageError>
   putMarker(folder: string): Effect.Effect<void, StorageError>
   relocate(fromKey: string, toKey: string): Effect.Effect<string, StorageError>
-  remove(storageKey: string, telegramMessageId: number | undefined): Effect.Effect<void, StorageError>
+  remove(
+    storageKey: string,
+    telegramMessageId: number | undefined,
+  ): Effect.Effect<void, StorageError>
   status(): Effect.Effect<string, StorageError>
 }

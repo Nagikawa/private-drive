@@ -8,7 +8,7 @@ import { Uploads } from "../drive/uploads.ts"
 const rangePattern = /^bytes (\d+)-(\d+)\/(\d+)$/
 
 // Writes one slice of a resumable upload. The client sends the next byte the server asked for.
-const appendChunk = Effect.fn("appendChunk")(function*() {
+const appendChunk = Effect.fn("appendChunk")(function* () {
   const request = yield* HttpServerRequest.HttpServerRequest
   const ledger = yield* SessionLedger
   const uploads = yield* Uploads
@@ -37,9 +37,9 @@ const appendChunk = Effect.fn("appendChunk")(function*() {
   if (bytes.byteLength > uploadChunkBytes || end - start + 1 !== bytes.byteLength) {
     return HttpServerResponse.text("Upload chunk does not match Content-Range", { status: 400 })
   }
-  const written = yield* uploads.append(id, start, bytes).pipe(
-    Effect.catchTag("StorageError", (error) => Effect.succeed(error)),
-  )
+  const written = yield* uploads
+    .append(id, start, bytes)
+    .pipe(Effect.catchTag("StorageError", (error) => Effect.succeed(error)))
   if (written instanceof StorageError) {
     const resumed = /^Resume this upload at byte (\d+)$/.exec(written.message)
     if (resumed !== null) {

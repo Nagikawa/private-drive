@@ -8,7 +8,11 @@ export const replaceCatalog = (
   entries: ReadonlyArray<StoredFile>,
   folders: ReadonlyArray<StoredFolder>,
 ): CatalogData =>
-  new (catalog.constructor as typeof CatalogData)({ entries: [...entries], folders: [...folders], version: 1 })
+  new (catalog.constructor as typeof CatalogData)({
+    entries: [...entries],
+    folders: [...folders],
+    version: 1,
+  })
 
 // Appends one file record while leaving the folder list untouched.
 export const addEntry = (catalog: CatalogData, entry: StoredFile): CatalogData =>
@@ -20,7 +24,10 @@ export const rememberFolder = (
   source: SourceId,
   folderPath: string,
 ): Array<StoredFolder> => {
-  if (folderPath === "" || folders.some((folder) => folder.source === source && folder.path === folderPath)) {
+  if (
+    folderPath === "" ||
+    folders.some((folder) => folder.source === source && folder.path === folderPath)
+  ) {
     return [...folders]
   }
   return [...folders, new StoredFolder({ path: folderPath, source })]
@@ -41,6 +48,6 @@ export const rememberFolderTree = (
 }
 
 // Stamps an index row with the current time so listings can show when a file was first seen.
-export const createdAt = Effect.fn("Catalog.createdAt")(function*() {
+export const createdAt = Effect.fn("Catalog.createdAt")(function* () {
   return DateTime.formatIso(yield* DateTime.now)
 })

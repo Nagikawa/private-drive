@@ -22,10 +22,12 @@ const collect = (turn: Subject<'next' | 'prev'>) => {
   const subscription = watchFolderListing({
     bind: <A>(effect: Effect.Effect<A, never, DriveServices>) =>
       new Observable<A>((subscriber) => {
-        void Effect.runPromise(effect as unknown as Effect.Effect<A, never, never>).then((value) => {
-          subscriber.next(value);
-          subscriber.complete();
-        });
+        void Effect.runPromise(effect as unknown as Effect.Effect<A, never, never>).then(
+          (value) => {
+            subscriber.next(value);
+            subscriber.complete();
+          },
+        );
       }),
     folder: of(''),
     load: (query) => Effect.succeed(query.cursor === undefined ? page('cursor-2') : page()),
@@ -57,5 +59,6 @@ describe('watchFolderListing', () => {
       expect(watched.states.at(-1)?.hasPrev).toBe(true);
       expect(emptyBrowse.page).toBe(1);
       watched.subscription.unsubscribe();
-    }));
+    }),
+  );
 });

@@ -50,14 +50,17 @@ const activeBook = (book: Book, now: number): Book => {
 }
 
 // Remembers which session nonces are still allowed, so logout can reject a cookie before it expires.
-export class SessionLedger extends Context.Service<SessionLedger, {
-  readonly accept: (token: string, now: number) => Effect.Effect<boolean>
-  readonly issue: (now: number) => Effect.Effect<string, Unauthorized>
-  readonly revoke: (token: string, now: number) => Effect.Effect<void>
-}>()("private-drive/SessionLedger") {
+export class SessionLedger extends Context.Service<
+  SessionLedger,
+  {
+    readonly accept: (token: string, now: number) => Effect.Effect<boolean>
+    readonly issue: (now: number) => Effect.Effect<string, Unauthorized>
+    readonly revoke: (token: string, now: number) => Effect.Effect<void>
+  }
+>()("private-drive/SessionLedger") {
   static readonly layer = Layer.effect(
     SessionLedger,
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const config = yield* AppConfig
       const fs = yield* FileSystem.FileSystem
       const path = yield* Path.Path
@@ -67,7 +70,7 @@ export class SessionLedger extends Context.Service<SessionLedger, {
       const owner = String(process.pid)
 
       // Creates the lock exclusively, or drops a lock whose owner process has exited.
-      const acquire = Effect.fn("SessionLedger.acquire")(function*() {
+      const acquire = Effect.fn("SessionLedger.acquire")(function* () {
         const deadline = Date.now() + 15_000
         while (Date.now() < deadline) {
           const created = yield* Effect.tryPromise({
@@ -81,7 +84,9 @@ export class SessionLedger extends Context.Service<SessionLedger, {
           if (Result.isSuccess(created)) {
             return
           }
-          if (!(Predicate.hasProperty(created.failure, "code") && created.failure.code === "EEXIST")) {
+          if (
+            !(Predicate.hasProperty(created.failure, "code") && created.failure.code === "EEXIST")
+          ) {
             return
           }
           const holder = yield* Effect.tryPromise({
@@ -100,7 +105,7 @@ export class SessionLedger extends Context.Service<SessionLedger, {
         }
       })
 
-      const release = Effect.fn("SessionLedger.release")(function*() {
+      const release = Effect.fn("SessionLedger.release")(function* () {
         const holder = yield* Effect.tryPromise({
           catch: () => "",
           try: () => readFile(lockPath, "utf8"),
@@ -114,7 +119,7 @@ export class SessionLedger extends Context.Service<SessionLedger, {
         }).pipe(Effect.catch(() => Effect.void))
       })
 
-      const load = Effect.fn("SessionLedger.load")(function*() {
+      const load = Effect.fn("SessionLedger.load")(function* () {
         const exists = yield* fs.exists(bookPath).pipe(Effect.catch(() => Effect.succeed(false)))
         if (!exists) {
           return {}
@@ -123,18 +128,18 @@ export class SessionLedger extends Context.Service<SessionLedger, {
         return parseBook(text)
       })
 
-      const save = Effect.fn("SessionLedger.save")(function*(book: Book) {
-        yield* fs.makeDirectory(path.dirname(bookPath), { recursive: true }).pipe(
-          Effect.mapError(() => "Could not create the session directory"),
-        )
+      const save = Effect.fn("SessionLedger.save")(function* (book: Book) {
+        yield* fs
+          .makeDirectory(path.dirname(bookPath), { recursive: true })
+          .pipe(Effect.mapError(() => "Could not create the session directory"))
         const temporary = `${bookPath}.${randomUUID()}.tmp`
         yield* Effect.tryPromise({
           catch: () => "Could not write the session ledger",
           try: () => writeFile(temporary, JSON.stringify({ sessions: book })),
         })
-        yield* fs.rename(temporary, bookPath).pipe(
-          Effect.mapError(() => "Could not replace the session ledger"),
-        )
+        yield* fs
+          .rename(temporary, bookPath)
+          .pipe(Effect.mapError(() => "Could not replace the session ledger"))
       })
 
       // Runs one ledger change while this process holds the lock.
@@ -142,7 +147,7 @@ export class SessionLedger extends Context.Service<SessionLedger, {
         Effect.acquireUseRelease(
           acquire(),
           () =>
-            Effect.gen(function*() {
+            Effect.gen(function* () {
               const book = yield* load()
               const [next, value] = use(book)
               yield* save(next)
@@ -165,7 +170,7 @@ export class SessionLedger extends Context.Service<SessionLedger, {
           ),
         // Accepts a cookie only when the signature is valid and logout has not removed the nonce.
         accept: (token, now) =>
-          Effect.gen(function*() {
+          Effect.gen(function* () {
             const claims = sessionClaims(secret, token, now)
             if (claims === undefined) {
               return false

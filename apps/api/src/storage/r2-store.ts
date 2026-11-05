@@ -14,10 +14,11 @@ export const r2Store = (r2: R2["Service"]): FileStore => ({
   list: (folder, recursive) => r2.list(folder, recursive),
   open: (storageKey) => r2.open(storageKey),
   putFile: (key, path, size, contentType) =>
-    r2.putFile(key, path, size, contentType).pipe(
-      Effect.as({ storageKey: key, telegramMessageId: undefined }),
-    ),
-  putMarker: (folder) => r2.put(`${folder}/${keepName}`, new Uint8Array(), "application/octet-stream"),
+    r2
+      .putFile(key, path, size, contentType)
+      .pipe(Effect.as({ storageKey: key, telegramMessageId: undefined })),
+  putMarker: (folder) =>
+    r2.put(`${folder}/${keepName}`, new Uint8Array(), "application/octet-stream"),
   relocate: (fromKey, toKey) => {
     if (fromKey === toKey) {
       return Effect.succeed(toKey)

@@ -6,9 +6,12 @@ export const SessionCookie = HttpApiSecurity.apiKey({
   key: "session",
 })
 
-export class Session extends HttpApiMiddleware.Service<Session, {
-  provides: CurrentAccount
-}>()("private-drive/Session", {
+export class Session extends HttpApiMiddleware.Service<
+  Session,
+  {
+    provides: CurrentAccount
+  }
+>()("private-drive/Session", {
   error: Unauthorized,
   requiredForClient: false,
   security: {

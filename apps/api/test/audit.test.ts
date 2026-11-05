@@ -9,9 +9,9 @@ import { configFor, tempDirectory } from "./support.ts"
 describe("AuditLog", () => {
   // Newlines cannot break the JSONL record, and a very long detail is cut off.
   it.effect("appends one JSON line with a flattened detail", () =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const directory = yield* tempDirectory
-      const audit = yield* Effect.gen(function*() {
+      const audit = yield* Effect.gen(function* () {
         return yield* AuditLog
       }).pipe(
         Effect.provide(AuditLog.layer),
@@ -27,12 +27,18 @@ describe("AuditLog", () => {
       const [line] = text.trim().split("\n")
       const parsed: unknown = JSON.parse(line ?? "")
       expect(parsed).toMatchObject({ action: "rename" })
-      if (typeof parsed === "object" && parsed !== null && "detail" in parsed && typeof parsed.detail === "string") {
+      if (
+        typeof parsed === "object" &&
+        parsed !== null &&
+        "detail" in parsed &&
+        typeof parsed.detail === "string"
+      ) {
         expect(parsed.detail.startsWith("a b")).toBe(true)
         expect(parsed.detail.includes("\n")).toBe(false)
         expect(parsed.detail.length).toBe(300)
       } else {
         expect(parsed).toEqual({ detail: "missing" })
       }
-    }))
+    }),
+  )
 })

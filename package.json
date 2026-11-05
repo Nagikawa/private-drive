@@ -5,10 +5,16 @@
   "scripts": {
     "dev": "turbo run dev --ui=tui",
     "build": "turbo build",
-    "test": "turbo test"
+    "test": "turbo test",
+    "lint": "turbo run lint --filter=./apps/* --filter=./packages/*",
+    "lint:fix": "turbo run lint:fix --filter=./apps/* --filter=./packages/*",
+    "format": "oxfmt --check",
+    "format:fix": "oxfmt"
   },
   "devDependencies": {
     "effect": "^4.1.1",
+    "oxfmt": "^0.76.0",
+    "oxlint": "^1.91.0",
     "turbo": "^2.6.1"
   }
 }

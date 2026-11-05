@@ -32,9 +32,11 @@ export class PreviewDialog {
       switchMap((entry) =>
         entry !== undefined && this.isText(entry)
           ? this.runtime.bind(
-              this.api.text(entry.id).pipe(Effect.catch(() => Effect.succeed('Could not read the content'))),
+              this.api
+                .text(entry.id)
+                .pipe(Effect.catch(() => Effect.succeed('Could not read the content'))),
             )
-          : of('')
+          : of(''),
       ),
     ),
     { initialValue: '' },

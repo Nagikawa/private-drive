@@ -9,13 +9,16 @@ import { Telegram } from "./telegram.ts"
 import { telegramStore } from "./telegram-store.ts"
 
 // The only place that knows which concrete clients exist. Callers ask by source id.
-export class Stores extends Context.Service<Stores, {
-  readonly all: ReadonlyArray<FileStore>
-  get(id: SourceId): FileStore
-}>()("private-drive/api/storage/Stores") {
+export class Stores extends Context.Service<
+  Stores,
+  {
+    readonly all: ReadonlyArray<FileStore>
+    get(id: SourceId): FileStore
+  }
+>()("private-drive/api/storage/Stores") {
   static readonly layer = Layer.effect(
     Stores,
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const r2 = r2Store(yield* R2)
       const telegram = telegramStore(yield* Telegram)
       const huggingface = huggingfaceStore(yield* HuggingFace)
@@ -25,9 +28,5 @@ export class Stores extends Context.Service<Stores, {
         get: (id) => byId[id],
       })
     }),
-  ).pipe(
-    Layer.provide(R2.layer),
-    Layer.provide(Telegram.layer),
-    Layer.provide(HuggingFace.layer),
-  )
+  ).pipe(Layer.provide(R2.layer), Layer.provide(Telegram.layer), Layer.provide(HuggingFace.layer))
 }

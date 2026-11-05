@@ -12,5 +12,6 @@ describe("storage labels", () => {
       expect(keepName).toBe(".keep")
       expect(unavailable("telegram").message).toContain("Telegram")
       expect(bytesOf(new Uint8Array(4))).toBe(4)
-    }))
+    }),
+  )
 })

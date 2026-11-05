@@ -8,7 +8,7 @@ import { forgetUpload, readPendingUploads, rememberUpload } from "../src/storage
 describe("R2 upload journal", () => {
   // A crash after CreateMultipartUpload leaves the id so the next boot can abort it.
   it.effect("remembers an upload and forgets it by id", () =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const directory = yield* Effect.tryPromise({
         try: () => mkdtemp(join(tmpdir(), "private-drive-r2-")),
         catch: () => new Error("Could not create a temp directory"),
@@ -17,7 +17,7 @@ describe("R2 upload journal", () => {
         Effect.tryPromise({
           try: () => rm(directory, { force: true, recursive: true }),
           catch: () => new Error("Could not remove the temp directory"),
-        }).pipe(Effect.ignore)
+        }).pipe(Effect.ignore),
       )
       const path = join(directory, "r2-uploads.json")
       expect(yield* Effect.tryPromise(() => readPendingUploads(path))).toEqual([])
@@ -27,5 +27,6 @@ describe("R2 upload journal", () => {
       expect(remembered).toEqual([{ key: "a", uploadId: "1" }])
       yield* Effect.tryPromise(() => forgetUpload(path, "1"))
       expect(yield* Effect.tryPromise(() => readPendingUploads(path))).toEqual([])
-    }))
+    }),
+  )
 })

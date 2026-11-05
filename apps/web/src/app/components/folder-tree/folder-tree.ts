@@ -13,7 +13,8 @@ export interface FolderTreeDrag {
   imports: [NgTemplateOutlet, RouterLink],
   templateUrl: './folder-tree.html',
   host: {
-    class: 'flex min-h-0 w-full flex-1 flex-col overflow-auto md:w-[30%] md:max-w-[300px] md:flex-none md:shrink-0',
+    class:
+      'flex min-h-0 w-full flex-1 flex-col overflow-auto md:w-[30%] md:max-w-[300px] md:flex-none md:shrink-0',
   },
 })
 export class FolderTree {

@@ -1,4 +1,13 @@
-import { Component, ElementRef, computed, effect, input, output, signal, viewChild } from '@angular/core';
+import {
+  Component,
+  ElementRef,
+  computed,
+  effect,
+  input,
+  output,
+  signal,
+  viewChild,
+} from '@angular/core';
 import { CdkVirtualScrollViewport, ScrollingModule } from '@angular/cdk/scrolling';
 import { type FileEntry, type FolderCrumb, type Listing } from '@private-drive/domain';
 import { Breadcrumbs } from '../breadcrumbs/breadcrumbs';
@@ -121,7 +130,10 @@ export class FilePane {
       }
       const element = viewport.elementRef.nativeElement;
       const measure = (): void => {
-        const columns = Math.max(1, Math.floor((element.clientWidth + this.gridGap) / (this.cardWidth + this.gridGap)));
+        const columns = Math.max(
+          1,
+          Math.floor((element.clientWidth + this.gridGap) / (this.cardWidth + this.gridGap)),
+        );
         this.gridColumns.set(columns);
         viewport.checkViewportSize();
       };
@@ -225,7 +237,10 @@ export class FilePane {
   protected onFileDragStart(event: DragEvent, id: string): void {
     const origin = this.dragOrigin;
     this.dragOrigin = null;
-    if (origin instanceof Element && origin.closest('input, label, .file-action, .dropdown-content') !== null) {
+    if (
+      origin instanceof Element &&
+      origin.closest('input, label, .file-action, .dropdown-content') !== null
+    ) {
       event.preventDefault();
       return;
     }

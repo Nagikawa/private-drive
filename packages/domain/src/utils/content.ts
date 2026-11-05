@@ -1,7 +1,7 @@
 import * as Effect from "effect/Effect"
 
 // Guesses a media type from the extension when an upload or remote listing does not provide one.
-export const contentTypeFromName = Effect.fnUntraced(function*(name: string) {
+export const contentTypeFromName = Effect.fnUntraced(function* (name: string) {
   const extension = name.split(".").at(-1)?.toLowerCase() ?? ""
   const types: Readonly<Record<string, string>> = {
     jpg: "image/jpeg",
@@ -27,26 +27,26 @@ export const contentTypeFromName = Effect.fnUntraced(function*(name: string) {
 })
 
 // Lets the file grid decide which entries can use an image preview.
-export const isImageContent = Effect.fnUntraced(function*(contentType: string) {
+export const isImageContent = Effect.fnUntraced(function* (contentType: string) {
   return contentType.startsWith("image/")
 })
 
 // Lets the preview dialog choose a video player.
-export const isVideoContent = Effect.fnUntraced(function*(contentType: string) {
+export const isVideoContent = Effect.fnUntraced(function* (contentType: string) {
   return contentType.startsWith("video/")
 })
 
 // Lets the preview dialog choose an audio player.
-export const isAudioContent = Effect.fnUntraced(function*(contentType: string) {
+export const isAudioContent = Effect.fnUntraced(function* (contentType: string) {
   return contentType.startsWith("audio/")
 })
 
 // Lets the preview dialog fetch the body and show it as text.
-export const isTextContent = Effect.fnUntraced(function*(contentType: string) {
+export const isTextContent = Effect.fnUntraced(function* (contentType: string) {
   return contentType.startsWith("text/") || contentType === "application/json"
 })
 
 // Lets the preview dialog embed a PDF instead of treating it as a download.
-export const isPdfContent = Effect.fnUntraced(function*(contentType: string) {
+export const isPdfContent = Effect.fnUntraced(function* (contentType: string) {
   return contentType === "application/pdf"
 })

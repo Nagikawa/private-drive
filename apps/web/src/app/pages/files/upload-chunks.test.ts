@@ -25,7 +25,8 @@ describe('uploadChunked', () => {
       const ranges: Array<string> = [];
       const api: ResumableUpload = {
         completeUpload: () => Effect.succeed(entry),
-        openUpload: () => Effect.succeed(new UploadProgress({ id: 'up-1', name: 'a.txt', offset: 0, size: 3 })),
+        openUpload: () =>
+          Effect.succeed(new UploadProgress({ id: 'up-1', name: 'a.txt', offset: 0, size: 3 })),
         sendChunk: (_id, start, end) =>
           Effect.sync(() => {
             ranges.push(`${start}-${end}`);
@@ -43,7 +44,8 @@ describe('uploadChunked', () => {
       expect(failed).toBe(0);
       expect(ranges).toEqual(['0-2']);
       expect(notices).toEqual([]);
-    }));
+    }),
+  );
 
   // A chunk that does not advance is a failure, and the queue still finishes the count.
   it.effect('counts a chunk that does not advance', () =>
@@ -51,7 +53,8 @@ describe('uploadChunked', () => {
       const notices: Array<string> = [];
       const api: ResumableUpload = {
         completeUpload: () => Effect.succeed(entry),
-        openUpload: () => Effect.succeed(new UploadProgress({ id: 'up-1', name: 'a.txt', offset: 0, size: 3 })),
+        openUpload: () =>
+          Effect.succeed(new UploadProgress({ id: 'up-1', name: 'a.txt', offset: 0, size: 3 })),
         sendChunk: () => Effect.succeed(0),
       };
       const failed = yield* uploadChunked({
@@ -63,7 +66,10 @@ describe('uploadChunked', () => {
         source: 'r2',
       });
       expect(failed).toBe(1);
-      expect(notices[0]).toBe(new NetworkFailure({ message: 'Could not upload the next part' }).message);
+      expect(notices[0]).toBe(
+        new NetworkFailure({ message: 'Could not upload the next part' }).message,
+      );
       expect(notices).not.toContain('Upload complete');
-    }));
+    }),
+  );
 });

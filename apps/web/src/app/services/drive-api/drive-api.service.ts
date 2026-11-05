@@ -108,13 +108,20 @@ export class DriveApi {
   }
 
   // Creates a folder on the active source.
-  createFolder(source: SourceId, path: string): Effect.Effect<FolderEntry, DriveFailure, DriveServices> {
-    return call((client) => client.files.createFolder({ payload: FolderPayload.make({ source, path }) }));
+  createFolder(
+    source: SourceId,
+    path: string,
+  ): Effect.Effect<FolderEntry, DriveFailure, DriveServices> {
+    return call((client) =>
+      client.files.createFolder({ payload: FolderPayload.make({ source, path }) }),
+    );
   }
 
   // Deletes an empty folder on the active source.
   deleteFolder(source: SourceId, path: string): Effect.Effect<void, DriveFailure, DriveServices> {
-    return call((client) => client.files.deleteFolder({ payload: FolderPayload.make({ source, path }) }));
+    return call((client) =>
+      client.files.deleteFolder({ payload: FolderPayload.make({ source, path }) }),
+    );
   }
 
   // Deletes the selected file ids.
@@ -123,7 +130,10 @@ export class DriveApi {
   }
 
   // Moves the selected files into another folder.
-  move(ids: ReadonlyArray<string>, folder: string): Effect.Effect<MoveResult, DriveFailure, DriveServices> {
+  move(
+    ids: ReadonlyArray<string>,
+    folder: string,
+  ): Effect.Effect<MoveResult, DriveFailure, DriveServices> {
     return call((client) => client.files.move({ payload: MovePayload.make({ folder, ids }) }));
   }
 
@@ -138,8 +148,14 @@ export class DriveApi {
   }
 
   // Stores a file fetched from a public URL.
-  uploadUrl(source: SourceId, folder: string, url: string): Effect.Effect<FileEntry, DriveFailure, DriveServices> {
-    return call((client) => client.files.uploadUrl({ payload: UrlUploadPayload.make({ source, folder, url }) }));
+  uploadUrl(
+    source: SourceId,
+    folder: string,
+    url: string,
+  ): Effect.Effect<FileEntry, DriveFailure, DriveServices> {
+    return call((client) =>
+      client.files.uploadUrl({ payload: UrlUploadPayload.make({ source, folder, url }) }),
+    );
   }
 
   // Opens a resumable upload, returning one that already has some bytes when the file matches.
@@ -181,10 +197,13 @@ export class DriveApi {
         });
         const text = await response.text();
         const parsed: unknown = text === '' ? {} : JSON.parse(text);
-        const offset = typeof parsed === 'object' && parsed !== null && 'offset' in parsed &&
-            typeof parsed.offset === 'number'
-          ? parsed.offset
-          : undefined;
+        const offset =
+          typeof parsed === 'object' &&
+          parsed !== null &&
+          'offset' in parsed &&
+          typeof parsed.offset === 'number'
+            ? parsed.offset
+            : undefined;
         if (response.status === 409 && offset !== undefined) {
           return offset;
         }
@@ -203,7 +222,11 @@ export class DriveApi {
   }
 
   // Posts the browser file as multipart through the same typed client as the JSON routes.
-  upload(file: File, source: SourceId, folder: string): Effect.Effect<FileEntry, DriveFailure, DriveServices> {
+  upload(
+    file: File,
+    source: SourceId,
+    folder: string,
+  ): Effect.Effect<FileEntry, DriveFailure, DriveServices> {
     const body = new FormData();
     body.set('source', source);
     body.set('folder', folder);

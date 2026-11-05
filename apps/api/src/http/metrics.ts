@@ -27,15 +27,15 @@ const render = (): string => {
 
 // Observes the status after the route has produced a response.
 export const recordResponses = HttpMiddleware.make((app) =>
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const request = yield* HttpServerRequest.HttpServerRequest
     const response = yield* app
     record(request.method, response.status)
     return response
-  })
+  }),
 )
 
-const metrics = Effect.fn("metrics")(function*() {
+const metrics = Effect.fn("metrics")(function* () {
   return HttpServerResponse.text(render(), { contentType: "text/plain; version=0.0.4" })
 })
 

@@ -6,19 +6,33 @@ export type SourceId = typeof SourceId.Type
 // Marks a signed-in session. The cookie is the credential; this body has no identity fields.
 export class Account extends Schema.Class<Account>("private-drive/Account")({}) {}
 
-export class CurrentAccount extends Context.Service<CurrentAccount, Account>()("private-drive/CurrentAccount") {}
+export class CurrentAccount extends Context.Service<CurrentAccount, Account>()(
+  "private-drive/CurrentAccount",
+) {}
 
-export class Unauthorized extends Schema.TaggedError<Unauthorized>()("Unauthorized", {
-  message: Schema.String,
-}, { httpApiStatus: 401 }) {}
+export class Unauthorized extends Schema.TaggedError<Unauthorized>()(
+  "Unauthorized",
+  {
+    message: Schema.String,
+  },
+  { httpApiStatus: 401 },
+) {}
 
-export class StorageError extends Schema.TaggedError<StorageError>()("StorageError", {
-  message: Schema.String,
-}, { httpApiStatus: 400 }) {}
+export class StorageError extends Schema.TaggedError<StorageError>()(
+  "StorageError",
+  {
+    message: Schema.String,
+  },
+  { httpApiStatus: 400 },
+) {}
 
-export class NotFound extends Schema.TaggedError<NotFound>()("NotFound", {
-  message: Schema.String,
-}, { httpApiStatus: 404 }) {}
+export class NotFound extends Schema.TaggedError<NotFound>()(
+  "NotFound",
+  {
+    message: Schema.String,
+  },
+  { httpApiStatus: 404 },
+) {}
 
 export class LoginPayload extends Schema.Class<LoginPayload>("private-drive/LoginPayload")({
   password: Schema.String,
@@ -62,7 +76,9 @@ export class FolderPayload extends Schema.Class<FolderPayload>("private-drive/Fo
   path: Schema.String,
 }) {}
 
-export class UrlUploadPayload extends Schema.Class<UrlUploadPayload>("private-drive/UrlUploadPayload")({
+export class UrlUploadPayload extends Schema.Class<UrlUploadPayload>(
+  "private-drive/UrlUploadPayload",
+)({
   source: SourceId,
   folder: Schema.String,
   url: Schema.String,

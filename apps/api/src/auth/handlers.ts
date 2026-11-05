@@ -1,14 +1,21 @@
 import { DateTime, Effect, Redacted } from "effect"
 import { HttpApiBuilder } from "effect/http-api"
 import { HttpServerRequest } from "effect/http"
-import { Account, Api, CurrentAccount, LoginPayload, SessionCookie, Unauthorized } from "@private-drive/domain"
+import {
+  Account,
+  Api,
+  CurrentAccount,
+  LoginPayload,
+  SessionCookie,
+  Unauthorized,
+} from "@private-drive/domain"
 import { AuditLog } from "../audit/log.ts"
 import { AppConfig } from "../config.ts"
 import { SessionLedger } from "./ledger.ts"
 import { cookieOptions, sameSecret } from "./session.ts"
 
 // Checks the posted password and sets the session cookie the browser will send on later calls.
-const login = Effect.fn("Session.login")(function*(
+const login = Effect.fn("Session.login")(function* (
   config: AppConfig["Service"],
   ledger: SessionLedger["Service"],
   audit: AuditLog["Service"],
@@ -34,7 +41,7 @@ const login = Effect.fn("Session.login")(function*(
 export const SessionHandlers = HttpApiBuilder.group(
   Api,
   "session",
-  Effect.fn("SessionHandlers")(function*(handlers) {
+  Effect.fn("SessionHandlers")(function* (handlers) {
     const config = yield* AppConfig
     const ledger = yield* SessionLedger
     const audit = yield* AuditLog
@@ -45,12 +52,16 @@ export const SessionHandlers = HttpApiBuilder.group(
       login: ({ payload }) => login(config, ledger, audit, payload),
       // Revokes the nonce and clears the cookie, so a copied cookie stops working.
       logout: () =>
-        Effect.gen(function*() {
+        Effect.gen(function* () {
           const request = yield* HttpServerRequest.HttpServerRequest
           const now = DateTime.toEpochMillis(yield* DateTime.now)
           yield* ledger.revoke(request.cookies["session"] ?? "", now)
           yield* audit.record("logout", "")
-          yield* HttpApiBuilder.securitySetCookie(SessionCookie, "", cookieOptions(config.cookieSecure, true))
+          yield* HttpApiBuilder.securitySetCookie(
+            SessionCookie,
+            "",
+            cookieOptions(config.cookieSecure, true),
+          )
         }),
     })
   }),

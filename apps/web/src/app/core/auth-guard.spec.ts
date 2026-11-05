@@ -10,7 +10,9 @@ describe('auth guards', () => {
   it('redirects from the result of the current session', async () => {
     TestBed.configureTestingModule({ providers: driveProviders() });
     const runtime = TestBed.inject(DriveRuntime);
-    const loggedOut = await TestBed.runInInjectionContext(() => authGuard({} as never, {} as never));
+    const loggedOut = await TestBed.runInInjectionContext(() =>
+      authGuard({} as never, {} as never),
+    );
     expect(loggedOut).toBeInstanceOf(UrlTree);
     expect(TestBed.inject(Router).serializeUrl(loggedOut as UrlTree)).toBe('/login');
 

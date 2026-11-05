@@ -9,5 +9,6 @@ describe("domain errors", () => {
       expect(new InvalidFolderPath({ message: "bad" })._tag).toBe("InvalidFolderPath")
       expect(new InvalidFileName({ message: "bad" })._tag).toBe("InvalidFileName")
       expect(new ResourceNameError({ message: "bad" })._tag).toBe("ResourceNameError")
-    }))
+    }),
+  )
 })

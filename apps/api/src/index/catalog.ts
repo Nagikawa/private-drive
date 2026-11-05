@@ -14,9 +14,10 @@ const encodeCatalog = Schema.encodeEffect(Schema.fromJsonString(CatalogData))
 // Turns a filesystem or JSON failure into the storage error the HTTP API already returns.
 const asIndexError = (cause: unknown) =>
   new StorageError({
-    message: cause instanceof Error
-      ? `Could not read or write the index: ${cause.message}`
-      : "Could not read or write the index",
+    message:
+      cause instanceof Error
+        ? `Could not read or write the index: ${cause.message}`
+        : "Could not read or write the index",
   })
 
 // A lock held by a process that no longer exists can be removed.
@@ -29,16 +30,19 @@ const ownerAlive = (pid: number): boolean => {
   }
 }
 
-export class Catalog extends Context.Service<Catalog, {
-  readonly modify: <A>(
-    use: (catalog: CatalogData) => readonly [CatalogData, A],
-  ) => Effect.Effect<A, StorageError>
-  readonly read: Effect.Effect<CatalogData, StorageError>
-}>()("private-drive/Catalog") {
+export class Catalog extends Context.Service<
+  Catalog,
+  {
+    readonly modify: <A>(
+      use: (catalog: CatalogData) => readonly [CatalogData, A],
+    ) => Effect.Effect<A, StorageError>
+    readonly read: Effect.Effect<CatalogData, StorageError>
+  }
+>()("private-drive/Catalog") {
   // Serializes index writes across processes so two API instances cannot overwrite the JSON file.
   static readonly layer = Layer.effect(
     Catalog,
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem
       const path = yield* Path.Path
       const config = yield* AppConfig
@@ -47,7 +51,7 @@ export class Catalog extends Context.Service<Catalog, {
       const owner = String(process.pid)
 
       // Creates the lock exclusively, or drops a lock whose owner process has exited.
-      const acquire = Effect.fn("Catalog.acquire")(function*() {
+      const acquire = Effect.fn("Catalog.acquire")(function* () {
         const deadline = Date.now() + 15_000
         while (Date.now() < deadline) {
           const created = yield* Effect.tryPromise({
@@ -61,7 +65,9 @@ export class Catalog extends Context.Service<Catalog, {
           if (Result.isSuccess(created)) {
             return
           }
-          if (!(Predicate.hasProperty(created.failure, "code") && created.failure.code === "EEXIST")) {
+          if (
+            !(Predicate.hasProperty(created.failure, "code") && created.failure.code === "EEXIST")
+          ) {
             return yield* new StorageError({ message: "Could not lock the index" })
           }
           const holder = yield* Effect.tryPromise({
@@ -82,7 +88,7 @@ export class Catalog extends Context.Service<Catalog, {
       })
 
       // Removes the lock only when this process still owns it.
-      const release = Effect.fn("Catalog.release")(function*() {
+      const release = Effect.fn("Catalog.release")(function* () {
         const holder = yield* Effect.tryPromise({
           catch: () => new StorageError({ message: "Could not read the index lock" }),
           try: () => readFile(lockPath, "utf8"),
@@ -97,7 +103,7 @@ export class Catalog extends Context.Service<Catalog, {
       })
 
       // Loads the local JSON index, treating a missing or blank file as an empty catalog.
-      const read = Effect.fn("Catalog.read")(function*() {
+      const read = Effect.fn("Catalog.read")(function* () {
         const exists = yield* fs.exists(indexPath)
         if (!exists) {
           return emptyCatalog()
@@ -110,7 +116,7 @@ export class Catalog extends Context.Service<Catalog, {
       }, Effect.mapError(asIndexError))
 
       // Writes the index via a temp file so a crash cannot leave a half-written catalog.
-      const write = Effect.fn("Catalog.write")(function*(catalog: CatalogData) {
+      const write = Effect.fn("Catalog.write")(function* (catalog: CatalogData) {
         yield* fs.makeDirectory(path.dirname(indexPath), { recursive: true })
         const exists = yield* fs.exists(indexPath)
         if (exists) {
@@ -130,7 +136,7 @@ export class Catalog extends Context.Service<Catalog, {
         Effect.acquireUseRelease(
           acquire(),
           () =>
-            Effect.gen(function*() {
+            Effect.gen(function* () {
               const current = yield* read()
               const [next, value] = use(current)
               yield* write(next)

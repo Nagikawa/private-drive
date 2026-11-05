@@ -19,7 +19,8 @@ export const telegramStore = (telegram: Telegram["Service"]): FileStore => ({
     telegram.put(key, path, contentType).pipe(
       Effect.map((stored) => ({
         storageKey: stored.storageKey,
-        telegramMessageId: stored.messageId === undefined ? undefined : Math.trunc(stored.messageId),
+        telegramMessageId:
+          stored.messageId === undefined ? undefined : Math.trunc(stored.messageId),
       })),
     ),
   putMarker: () => Effect.void,

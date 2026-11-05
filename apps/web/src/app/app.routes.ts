@@ -12,7 +12,8 @@ export const routes: Routes = [
     path: '',
     canActivate: [authGuard],
     // Loads the shell once, then shows the file browser inside it.
-    loadComponent: () => import('./shell/drive-shell/drive-shell').then((module) => module.DriveShell),
+    loadComponent: () =>
+      import('./shell/drive-shell/drive-shell').then((module) => module.DriveShell),
     children: [
       {
         path: '',

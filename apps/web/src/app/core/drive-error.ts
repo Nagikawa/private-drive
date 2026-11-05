@@ -22,8 +22,16 @@ export class SessionFailure extends Schema.TaggedError<SessionFailure>()('Sessio
 }) {}
 
 // A saved preference could not be read or written, so the screen keeps the in-memory value.
-export class PreferenceFailure extends Schema.TaggedError<PreferenceFailure>()('PreferenceFailure', {
-  message: Schema.String,
-}) {}
+export class PreferenceFailure extends Schema.TaggedError<PreferenceFailure>()(
+  'PreferenceFailure',
+  {
+    message: Schema.String,
+  },
+) {}
 
-export type DriveFailure = Unauthorized | StorageError | NotFound | NetworkFailure | InvalidResponse;
+export type DriveFailure =
+  | Unauthorized
+  | StorageError
+  | NotFound
+  | NetworkFailure
+  | InvalidResponse;

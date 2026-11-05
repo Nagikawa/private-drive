@@ -1,4 +1,12 @@
-import { Component, ElementRef, afterRenderEffect, computed, effect, inject, viewChild } from '@angular/core';
+import {
+  Component,
+  ElementRef,
+  afterRenderEffect,
+  computed,
+  effect,
+  inject,
+  viewChild,
+} from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { Router, RouterLink, RouterOutlet } from '@angular/router';
 import { Effect } from 'effect';
@@ -26,7 +34,9 @@ export class DriveShell {
   // Loads provider status once so the shell can hide sources that are not configured.
   protected readonly statuses = toSignal(
     this.runtime.bind(
-      this.api.sources().pipe(Effect.catch(() => Effect.succeed([] as ReadonlyArray<SourceStatus>))),
+      this.api
+        .sources()
+        .pipe(Effect.catch(() => Effect.succeed([] as ReadonlyArray<SourceStatus>))),
     ),
     { initialValue: [] as ReadonlyArray<SourceStatus> },
   );

@@ -7,7 +7,9 @@
     "dev": "node --env-file=../../.env --import tsx --watch src/main.ts",
     "start": "node --env-file=../../.env --import tsx src/main.ts",
     "build": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "lint": "pnpm exec oxlint .",
+    "lint:fix": "pnpm exec oxlint --fix ."
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.940.0",

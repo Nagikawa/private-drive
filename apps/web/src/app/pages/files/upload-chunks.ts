@@ -1,5 +1,10 @@
 import { Effect } from 'effect';
-import { uploadChunkBytes, type FileEntry, type SourceId, type UploadProgress } from '@private-drive/domain';
+import {
+  uploadChunkBytes,
+  type FileEntry,
+  type SourceId,
+  type UploadProgress,
+} from '@private-drive/domain';
 import { NetworkFailure, type DriveFailure } from '../../core/drive-error';
 import type { DriveServices } from '../../services/drive-runtime/drive-runtime.service';
 
@@ -50,7 +55,13 @@ export const uploadChunked = (input: {
             try: () => file.slice(offset, end + 1).arrayBuffer(),
             catch: () => new NetworkFailure({ message: 'Could not read the file' }),
           });
-          const next = yield* input.api.sendChunk(session.id, offset, end, file.size, new Uint8Array(slice));
+          const next = yield* input.api.sendChunk(
+            session.id,
+            offset,
+            end,
+            file.size,
+            new Uint8Array(slice),
+          );
           if (next <= offset) {
             return yield* new NetworkFailure({ message: 'Could not upload the next part' });
           }

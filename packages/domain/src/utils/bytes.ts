@@ -1,7 +1,7 @@
 import * as Effect from "effect/Effect"
 
 // Formats a byte count for the file list without pulling in a locale library.
-export const formatBytes = Effect.fnUntraced(function*(size: number) {
+export const formatBytes = Effect.fnUntraced(function* (size: number) {
   if (size < 1024) {
     return `${size} B`
   }

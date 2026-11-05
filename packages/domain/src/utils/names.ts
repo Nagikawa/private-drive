@@ -3,7 +3,10 @@ import { InvalidFileName } from "../errors.ts"
 import { sanitizeFileName } from "../policy/paths.ts"
 
 // Keeps the stored extension, so a typed suffix cannot change the file type.
-export const nameKeepingType = Effect.fnUntraced(function*(currentName: string, requested: string) {
+export const nameKeepingType = Effect.fnUntraced(function* (
+  currentName: string,
+  requested: string,
+) {
   const dot = currentName.lastIndexOf(".")
   const extension = dot > 0 ? currentName.slice(dot) : ""
   const cleaned = yield* sanitizeFileName(requested)
@@ -16,7 +19,7 @@ export const nameKeepingType = Effect.fnUntraced(function*(currentName: string, 
 })
 
 // Adds a numeric suffix so two uploads in the same folder can share a display name.
-export const uniqueName = Effect.fnUntraced(function*(name: string, used: ReadonlySet<string>) {
+export const uniqueName = Effect.fnUntraced(function* (name: string, used: ReadonlySet<string>) {
   if (!used.has(name)) {
     return name
   }

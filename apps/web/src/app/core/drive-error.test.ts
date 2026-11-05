@@ -10,5 +10,6 @@ describe('drive errors', () => {
       expect(new PreferenceFailure({ message: 'Could not save preferences' }).message).toBe(
         'Could not save preferences',
       );
-    }));
+    }),
+  );
 });

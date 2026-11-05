@@ -19,27 +19,34 @@ const FileInfo = Schema.Struct({
 // Cloud getFile refuses documents above about 20 MB with "file is too big".
 const lookupError = (description: string | undefined): StorageError =>
   description !== undefined && description.toLowerCase().includes("file is too big")
-    ? new StorageError({ message: "Telegram cloud downloads stop at 20 MB, so this file cannot be opened" })
+    ? new StorageError({
+        message: "Telegram cloud downloads stop at 20 MB, so this file cannot be opened",
+      })
     : new StorageError({ message: "Telegram file not found" })
 
-export class Telegram extends Context.Service<Telegram, {
-  readonly configured: boolean
-  deleteMessage(messageId: number): Effect.Effect<void, StorageError>
-  get(fileId: string): Effect.Effect<Uint8Array, StorageError>
-  open(fileId: string): Effect.Effect<Stream.Stream<Uint8Array, StorageError>, StorageError>
-  put(key: string, path: string, contentType: string): Effect.Effect<TelegramStored, StorageError>
-  status(): Effect.Effect<string, StorageError>
-}>()("private-drive/api/storage/Telegram") {
+export class Telegram extends Context.Service<
+  Telegram,
+  {
+    readonly configured: boolean
+    deleteMessage(messageId: number): Effect.Effect<void, StorageError>
+    get(fileId: string): Effect.Effect<Uint8Array, StorageError>
+    open(fileId: string): Effect.Effect<Stream.Stream<Uint8Array, StorageError>, StorageError>
+    put(key: string, path: string, contentType: string): Effect.Effect<TelegramStored, StorageError>
+    status(): Effect.Effect<string, StorageError>
+  }
+>()("private-drive/api/storage/Telegram") {
   // Talks to the bot API with the configured token, and fails closed when the bot is unset.
   static readonly layer = Layer.effect(
     Telegram,
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const config = yield* AppConfig
       const raw = yield* HttpClient.HttpClient
       const http = raw.pipe(HttpClient.filterStatusOk)
 
       // Calls a bot method and decodes the JSON body into an unknown value the caller parses.
-      const call = Effect.fn("Telegram.call")(function*(init: HttpClientRequest.HttpClientRequest) {
+      const call = Effect.fn("Telegram.call")(function* (
+        init: HttpClientRequest.HttpClientRequest,
+      ) {
         if (config.telegram === undefined) {
           return yield* unavailable("telegram")
         }
@@ -53,7 +60,11 @@ export class Telegram extends Context.Service<Telegram, {
       })
 
       // Uploads a document from disk and keeps Telegram's file id, because the chat is the actual store.
-      const put = Effect.fn("Telegram.put")(function*(key: string, path: string, contentType: string) {
+      const put = Effect.fn("Telegram.put")(function* (
+        key: string,
+        path: string,
+        contentType: string,
+      ) {
         if (config.telegram === undefined) {
           return yield* unavailable("telegram")
         }
@@ -69,14 +80,20 @@ export class Telegram extends Context.Service<Telegram, {
           HttpClientRequest.bodyFormData(form),
           call,
         )
-        const parsed = yield* Schema.decodeUnknownEffect(Schema.Struct({
-          ok: Schema.Boolean,
-          result: Schema.optional(Schema.Struct({
-            document: Schema.optional(Schema.Struct({ file_id: Schema.String })),
-            message_id: Schema.optional(Schema.Number),
-          })),
-        }))(result).pipe(
-          Effect.mapError(() => new StorageError({ message: "Could not parse the Telegram upload response" })),
+        const parsed = yield* Schema.decodeUnknownEffect(
+          Schema.Struct({
+            ok: Schema.Boolean,
+            result: Schema.optional(
+              Schema.Struct({
+                document: Schema.optional(Schema.Struct({ file_id: Schema.String })),
+                message_id: Schema.optional(Schema.Number),
+              }),
+            ),
+          }),
+        )(result).pipe(
+          Effect.mapError(
+            () => new StorageError({ message: "Could not parse the Telegram upload response" }),
+          ),
         )
         const fileId = parsed.result?.document?.file_id
         if (!parsed.ok || fileId === undefined) {
@@ -89,7 +106,7 @@ export class Telegram extends Context.Service<Telegram, {
       })
 
       // Resolves a file id. A 400 from getFile still has a description, so an oversized file is not reported as missing.
-      const resolvePath = Effect.fn("Telegram.resolvePath")(function*(fileId: string) {
+      const resolvePath = Effect.fn("Telegram.resolvePath")(function* (fileId: string) {
         if (config.telegram === undefined) {
           return yield* unavailable("telegram")
         }
@@ -109,7 +126,7 @@ export class Telegram extends Context.Service<Telegram, {
       })
 
       // Opens a bot file as a byte stream so a download does not hold the whole file in memory.
-      const open = Effect.fn("Telegram.open")(function*(fileId: string) {
+      const open = Effect.fn("Telegram.open")(function* (fileId: string) {
         if (config.telegram === undefined) {
           return yield* unavailable("telegram")
         }
@@ -127,7 +144,7 @@ export class Telegram extends Context.Service<Telegram, {
       })
 
       // Resolves a file id to bytes for callers that still need the whole document.
-      const get = Effect.fn("Telegram.get")(function*(fileId: string) {
+      const get = Effect.fn("Telegram.get")(function* (fileId: string) {
         if (config.telegram === undefined) {
           return yield* unavailable("telegram")
         }
@@ -146,7 +163,7 @@ export class Telegram extends Context.Service<Telegram, {
       })
 
       // Asks Telegram to drop the chat message, and ignores a miss so the index row can still be removed.
-      const deleteMessage = Effect.fn("Telegram.deleteMessage")(function*(messageId: number) {
+      const deleteMessage = Effect.fn("Telegram.deleteMessage")(function* (messageId: number) {
         if (config.telegram === undefined) {
           return yield* unavailable("telegram")
         }
@@ -161,13 +178,17 @@ export class Telegram extends Context.Service<Telegram, {
       })
 
       // Asks getMe so the source list can show the bot handle when the token works.
-      const status = Effect.fn("Telegram.status")(function*() {
+      const status = Effect.fn("Telegram.status")(function* () {
         const result = yield* call(HttpClientRequest.get("/getMe"))
-        const parsed = yield* Schema.decodeUnknownEffect(Schema.Struct({
-          ok: Schema.Boolean,
-          result: Schema.optional(Schema.Struct({ username: Schema.optional(Schema.String) })),
-        }))(result).pipe(Effect.orElseSucceed(() => ({ ok: false, result: undefined })))
-        return parsed.ok ? `Connected @${parsed.result?.username ?? "bot"}` : "Telegram did not respond"
+        const parsed = yield* Schema.decodeUnknownEffect(
+          Schema.Struct({
+            ok: Schema.Boolean,
+            result: Schema.optional(Schema.Struct({ username: Schema.optional(Schema.String) })),
+          }),
+        )(result).pipe(Effect.orElseSucceed(() => ({ ok: false, result: undefined })))
+        return parsed.ok
+          ? `Connected @${parsed.result?.username ?? "bot"}`
+          : "Telegram did not respond"
       })
 
       return Telegram.of({

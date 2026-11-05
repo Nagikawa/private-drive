@@ -7,7 +7,8 @@ import { SessionLedger } from "./ledger.ts"
 const week = 7 * 24 * 60 * 60 * 1000
 
 // HMACs a value so a direct string compare never sees the raw session secret.
-const digest = (secret: string, value: string): Buffer => createHmac("sha256", secret).update(value).digest()
+const digest = (secret: string, value: string): Buffer =>
+  createHmac("sha256", secret).update(value).digest()
 
 // Compares secrets in constant time so login timing does not leak the password.
 export const sameSecret = (secret: string, left: string, right: string): boolean =>
@@ -26,9 +27,19 @@ export interface SessionClaims {
 }
 
 // Accepts a cookie only when the signature matches and the embedded expiry is still ahead.
-export const sessionClaims = (secret: string, token: string, now: number): SessionClaims | undefined => {
+export const sessionClaims = (
+  secret: string,
+  token: string,
+  now: number,
+): SessionClaims | undefined => {
   const [expiresText, nonce, signature, extra] = token.split(".")
-  if (expiresText === undefined || nonce === undefined || signature === undefined || extra !== undefined || nonce === "") {
+  if (
+    expiresText === undefined ||
+    nonce === undefined ||
+    signature === undefined ||
+    extra !== undefined ||
+    nonce === ""
+  ) {
     return undefined
   }
   const body = `${expiresText}.${nonce}`
@@ -59,21 +70,17 @@ export const cookieOptions = (secure: boolean, clear: boolean) => ({
 // Checks the session cookie and provides the current account to protected routes.
 export const SessionLive = Layer.effect(
   Session,
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const ledger = yield* SessionLedger
     return Session.of({
       // Turns a valid session cookie into the current account before a protected handler runs.
-      session: Effect.fn("Session.session")(function*(httpEffect, { credential }) {
+      session: Effect.fn("Session.session")(function* (httpEffect, { credential }) {
         const now = DateTime.toEpochMillis(yield* DateTime.now)
         const accepted = yield* ledger.accept(Redacted.value(credential), now)
         if (!accepted) {
           return yield* new Unauthorized({ message: "Log in first" })
         }
-        return yield* Effect.provideService(
-          httpEffect,
-          CurrentAccount,
-          new Account({}),
-        )
+        return yield* Effect.provideService(httpEffect, CurrentAccount, new Account({}))
       }),
     })
   }),

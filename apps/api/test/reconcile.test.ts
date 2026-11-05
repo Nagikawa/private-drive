@@ -30,7 +30,8 @@ describe("reconcileRemote", () => {
         stamp: "2026-01-02T00:00:00.000Z",
       })
       expect(next.entries.map((entry) => entry.id)).toEqual(["kept"])
-    }))
+    }),
+  )
 
   // A page that says it continued must not delete rows it never returned.
   it.effect("keeps unseen rows when the remote page is truncated", () =>
@@ -50,7 +51,8 @@ describe("reconcileRemote", () => {
       })
       expect(next.entries.map((entry) => entry.name).sort()).toEqual(["kept.txt", "new.txt"])
       expect(next.folders.map((folder) => folder.path)).toEqual(["img/scene"])
-    }))
+    }),
+  )
 
   // A finished listing drops a file the store no longer has, and ignores the folder marker.
   it.effect("drops a missing file and skips the keep marker", () =>
@@ -69,5 +71,6 @@ describe("reconcileRemote", () => {
         stamp: "2026-01-02T00:00:00.000Z",
       })
       expect(next.entries).toEqual([])
-    }))
+    }),
+  )
 })

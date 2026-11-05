@@ -8,7 +8,7 @@ const ConnectedDetail = Schema.TemplateLiteralParser([
 ])
 
 // Splits a provider status into the resource name. A mismatch fails with a tagged error and does not throw.
-export const connectedResource = Effect.fnUntraced(function*(detail: string) {
+export const connectedResource = Effect.fnUntraced(function* (detail: string) {
   const parts = yield* Schema.decodeUnknownEffect(ConnectedDetail)(detail).pipe(
     Effect.mapError(() => new ResourceNameError({ message: "Status has no resource name" })),
   )

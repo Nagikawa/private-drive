@@ -31,7 +31,7 @@ const UploadPayload = Schema.Struct({
   file: Multipart.SingleFileSchema,
   folder: Schema.String,
   source: SourceId,
-// No parser cap. Telegram still refuses a document above 50 MB, and the other stores stream the file.
+  // No parser cap. Telegram still refuses a document above 50 MB, and the other stores stream the file.
 }).pipe(HttpApiSchema.asMultipart())
 
 export class SessionApi extends HttpApiGroup.make("session")
@@ -51,8 +51,7 @@ export class SessionApi extends HttpApiGroup.make("session")
       success: Account,
     }),
   )
-  .prefix("/api/session")
-{}
+  .prefix("/api/session") {}
 
 export class FilesApi extends HttpApiGroup.make("files")
   .add(
@@ -133,7 +132,6 @@ export class FilesApi extends HttpApiGroup.make("files")
     }),
   )
   .middleware(Session)
-  .prefix("/api")
-{}
+  .prefix("/api") {}
 
 export class Api extends HttpApi.make("private-drive").add(SessionApi).add(FilesApi) {}

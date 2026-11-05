@@ -9,8 +9,11 @@ describe("content signatures", () => {
       const expiresAt = 5_000
       const signature = signContent("secret", "file-1", expiresAt)
       expect(shareLifetime).toBe(60 * 60 * 1000)
-      expect(contentSignatureValid("secret", "file-1", String(expiresAt), signature, 4_000)).toBe(true)
-    }))
+      expect(contentSignatureValid("secret", "file-1", String(expiresAt), signature, 4_000)).toBe(
+        true,
+      )
+    }),
+  )
 
   // Another file, a wrong secret, or a past expiry must not open the content route.
   it.effect("rejects a signature that does not match this file and time", () =>
@@ -21,5 +24,6 @@ describe("content signatures", () => {
       expect(contentSignatureValid("secret", "file-1", "5000", signature, 5_000)).toBe(false)
       expect(contentSignatureValid("secret", "file-1", "nope", signature, 0)).toBe(false)
       expect(contentSignatureValid("secret", "file-1", "5000", "", 0)).toBe(false)
-    }))
+    }),
+  )
 })

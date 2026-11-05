@@ -1,25 +1,43 @@
 import { createHash } from "node:crypto"
-import { ByteSize, Context, Effect, FileSystem, Layer, Option, Redacted, Schema, Stream } from "effect"
+import {
+  ByteSize,
+  Context,
+  Effect,
+  FileSystem,
+  Layer,
+  Option,
+  Redacted,
+  Schema,
+  Stream,
+} from "effect"
 import { Headers, HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http"
 import * as Base64 from "effect/encoding/Base64"
-import { StorageError, contentTypeFromName, splitStorageKey, uploadParts } from "@private-drive/domain"
+import {
+  StorageError,
+  contentTypeFromName,
+  splitStorageKey,
+  uploadParts,
+} from "@private-drive/domain"
 import { AppConfig } from "../config.ts"
 import { bytesOf, unavailable, type RemoteFile, type RemoteListing } from "./shared.ts"
 
-export class HuggingFace extends Context.Service<HuggingFace, {
-  readonly configured: boolean
-  delete(key: string): Effect.Effect<void, StorageError>
-  get(key: string): Effect.Effect<Uint8Array, StorageError>
-  list(folder: string, recursive: boolean): Effect.Effect<RemoteListing, StorageError>
-  open(key: string): Effect.Effect<Stream.Stream<Uint8Array, StorageError>, StorageError>
-  put(key: string, bytes: Uint8Array): Effect.Effect<void, StorageError>
-  putFile(key: string, path: string, size: number): Effect.Effect<void, StorageError>
-  status(): Effect.Effect<string, StorageError>
-}>()("private-drive/api/storage/HuggingFace") {
+export class HuggingFace extends Context.Service<
+  HuggingFace,
+  {
+    readonly configured: boolean
+    delete(key: string): Effect.Effect<void, StorageError>
+    get(key: string): Effect.Effect<Uint8Array, StorageError>
+    list(folder: string, recursive: boolean): Effect.Effect<RemoteListing, StorageError>
+    open(key: string): Effect.Effect<Stream.Stream<Uint8Array, StorageError>, StorageError>
+    put(key: string, bytes: Uint8Array): Effect.Effect<void, StorageError>
+    putFile(key: string, path: string, size: number): Effect.Effect<void, StorageError>
+    status(): Effect.Effect<string, StorageError>
+  }
+>()("private-drive/api/storage/HuggingFace") {
   // Uses the dataset API for small files and LFS for anything the commit endpoint will not inline.
   static readonly layer = Layer.effect(
     HuggingFace,
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const config = yield* AppConfig
       const fs = yield* FileSystem.FileSystem
       const raw = yield* HttpClient.HttpClient
@@ -38,7 +56,9 @@ export class HuggingFace extends Context.Service<HuggingFace, {
       }
 
       // Commits an ndjson batch so create, upload, and delete share one write path.
-      const commit = Effect.fn("HuggingFace.commit")(function*(operations: ReadonlyArray<unknown>) {
+      const commit = Effect.fn("HuggingFace.commit")(function* (
+        operations: ReadonlyArray<unknown>,
+      ) {
         const target = targetFor("/commit/main")
         if (target === undefined) {
           return yield* unavailable("huggingface")
@@ -53,11 +73,14 @@ export class HuggingFace extends Context.Service<HuggingFace, {
       })
 
       // Stores a file inline when it is small, otherwise uploads the blob through LFS and commits the pointer.
-      const put = Effect.fn("HuggingFace.put")(function*(key: string, bytes: Uint8Array) {
+      const put = Effect.fn("HuggingFace.put")(function* (key: string, bytes: Uint8Array) {
         if (bytesOf(bytes) <= 8 * 1024 * 1024) {
           yield* commit([
             { key: "header", value: { description: "", summary: "upload" } },
-            { key: "file", value: { content: Base64.encode(bytes), encoding: "base64", path: key } },
+            {
+              key: "file",
+              value: { content: Base64.encode(bytes), encoding: "base64", path: key },
+            },
           ])
           return
         }
@@ -78,16 +101,26 @@ export class HuggingFace extends Context.Service<HuggingFace, {
             transfers: ["basic"],
           }),
           http.execute,
-          Effect.flatMap(HttpClientResponse.schemaBodyJson(Schema.Struct({
-            objects: Schema.Array(Schema.Struct({
-              actions: Schema.optional(Schema.Struct({
-                upload: Schema.optional(Schema.Struct({
-                  header: Schema.optional(Schema.Record(Schema.String, Schema.String)),
-                  href: Schema.String,
-                })),
-              })),
-            })),
-          }))),
+          Effect.flatMap(
+            HttpClientResponse.schemaBodyJson(
+              Schema.Struct({
+                objects: Schema.Array(
+                  Schema.Struct({
+                    actions: Schema.optional(
+                      Schema.Struct({
+                        upload: Schema.optional(
+                          Schema.Struct({
+                            header: Schema.optional(Schema.Record(Schema.String, Schema.String)),
+                            href: Schema.String,
+                          }),
+                        ),
+                      }),
+                    ),
+                  }),
+                ),
+              }),
+            ),
+          ),
           Effect.mapError(() => new StorageError({ message: "Hugging Face LFS upload failed" })),
         )
         const upload = batch.objects[0]?.actions?.upload
@@ -96,7 +129,9 @@ export class HuggingFace extends Context.Service<HuggingFace, {
             HttpClientRequest.setHeaders(upload.header ?? {}),
             HttpClientRequest.bodyUint8Array(bytes),
             http.execute,
-            Effect.mapError(() => new StorageError({ message: "Hugging Face LFS transfer failed" })),
+            Effect.mapError(
+              () => new StorageError({ message: "Hugging Face LFS transfer failed" }),
+            ),
           )
         }
         yield* commit([
@@ -106,17 +141,27 @@ export class HuggingFace extends Context.Service<HuggingFace, {
       })
 
       const lfsBatch = Schema.Struct({
-        objects: Schema.Array(Schema.Struct({
-          actions: Schema.optional(Schema.Struct({
-            upload: Schema.optional(Schema.Struct({
-              header: Schema.optional(Schema.Record(Schema.String, Schema.Union([Schema.String, Schema.Number]))),
-              href: Schema.String,
-            })),
-          })),
-          error: Schema.optional(Schema.Struct({
-            message: Schema.optional(Schema.String),
-          })),
-        })),
+        objects: Schema.Array(
+          Schema.Struct({
+            actions: Schema.optional(
+              Schema.Struct({
+                upload: Schema.optional(
+                  Schema.Struct({
+                    header: Schema.optional(
+                      Schema.Record(Schema.String, Schema.Union([Schema.String, Schema.Number])),
+                    ),
+                    href: Schema.String,
+                  }),
+                ),
+              }),
+            ),
+            error: Schema.optional(
+              Schema.Struct({
+                message: Schema.optional(Schema.String),
+              }),
+            ),
+          }),
+        ),
       })
 
       const rejection = Schema.Struct({
@@ -125,44 +170,58 @@ export class HuggingFace extends Context.Service<HuggingFace, {
       })
 
       // Reads a failed Hub response so a size rejection reaches the notice instead of a generic failure.
-      const rejected = Effect.fn("HuggingFace.rejected")(function*(response: HttpClientResponse.HttpClientResponse) {
+      const rejected = Effect.fn("HuggingFace.rejected")(function* (
+        response: HttpClientResponse.HttpClientResponse,
+      ) {
         const text = yield* response.text.pipe(Effect.orElseSucceed(() => ""))
-        const parsed = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(rejection))(text).pipe(
-          Effect.orElseSucceed(() => ({ error: undefined, message: undefined })),
-        )
+        const parsed = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(rejection))(
+          text,
+        ).pipe(Effect.orElseSucceed(() => ({ error: undefined, message: undefined })))
         const detail = parsed.message ?? parsed.error
         return yield* new StorageError({
-          message: detail !== undefined && detail !== ""
-            ? detail
-            : `Hugging Face rejected this file (${response.status})`,
+          message:
+            detail !== undefined && detail !== ""
+              ? detail
+              : `Hugging Face rejected this file (${response.status})`,
         })
       })
 
       // Hashes the file in chunks so the LFS oid does not require the whole body in memory.
-      const hashFile = Effect.fn("HuggingFace.hashFile")(function*(path: string) {
-        return yield* Effect.scoped(Effect.gen(function*() {
-          const file = yield* fs.open(path).pipe(
-            Effect.mapError(() => new StorageError({ message: "Could not read the uploaded temporary file" })),
-          )
-          const hash = createHash("sha256")
-          const buffer = new Uint8Array(1024 * 1024)
-          let position = 0n
-          while (true) {
-            const count = yield* file.read(buffer, { position }).pipe(
-              Effect.mapError(() => new StorageError({ message: "Could not read the uploaded temporary file" })),
-            )
-            if (count === 0) {
-              break
+      const hashFile = Effect.fn("HuggingFace.hashFile")(function* (path: string) {
+        return yield* Effect.scoped(
+          Effect.gen(function* () {
+            const file = yield* fs
+              .open(path)
+              .pipe(
+                Effect.mapError(
+                  () => new StorageError({ message: "Could not read the uploaded temporary file" }),
+                ),
+              )
+            const hash = createHash("sha256")
+            const buffer = new Uint8Array(1024 * 1024)
+            let position = 0n
+            while (true) {
+              const count = yield* file
+                .read(buffer, { position })
+                .pipe(
+                  Effect.mapError(
+                    () =>
+                      new StorageError({ message: "Could not read the uploaded temporary file" }),
+                  ),
+                )
+              if (count === 0) {
+                break
+              }
+              hash.update(buffer.subarray(0, count))
+              position += BigInt(count)
             }
-            hash.update(buffer.subarray(0, count))
-            position += BigInt(count)
-          }
-          return hash.digest("hex")
-        }))
+            return hash.digest("hex")
+          }),
+        )
       })
 
       // Sends one byte range as the body of a request without reading the rest of the file.
-      const putRange = Effect.fn("HuggingFace.putRange")(function*(
+      const putRange = Effect.fn("HuggingFace.putRange")(function* (
         href: string,
         path: string,
         offset: number,
@@ -176,9 +235,13 @@ export class HuggingFace extends Context.Service<HuggingFace, {
           Effect.mapError(() => new StorageError({ message: "Hugging Face LFS transfer failed" })),
           Effect.provideService(FileSystem.FileSystem, fs),
         )
-        const response = yield* raw.execute(request).pipe(
-          Effect.mapError(() => new StorageError({ message: "Hugging Face LFS transfer failed" })),
-        )
+        const response = yield* raw
+          .execute(request)
+          .pipe(
+            Effect.mapError(
+              () => new StorageError({ message: "Hugging Face LFS transfer failed" }),
+            ),
+          )
         if (response.status < 200 || response.status >= 300) {
           return yield* rejected(response)
         }
@@ -186,11 +249,19 @@ export class HuggingFace extends Context.Service<HuggingFace, {
       })
 
       // Uploads from disk. Small files stay on the inline commit path; larger files use chunked LFS.
-      const putFile = Effect.fn("HuggingFace.putFile")(function*(key: string, path: string, size: number) {
+      const putFile = Effect.fn("HuggingFace.putFile")(function* (
+        key: string,
+        path: string,
+        size: number,
+      ) {
         if (size <= 8 * 1024 * 1024) {
-          const bytes = yield* fs.readFile(path).pipe(
-            Effect.mapError(() => new StorageError({ message: "Could not read the uploaded temporary file" })),
-          )
+          const bytes = yield* fs
+            .readFile(path)
+            .pipe(
+              Effect.mapError(
+                () => new StorageError({ message: "Could not read the uploaded temporary file" }),
+              ),
+            )
           yield* put(key, bytes)
           return
         }
@@ -226,7 +297,8 @@ export class HuggingFace extends Context.Service<HuggingFace, {
         if (object.error !== undefined) {
           const message = object.error.message
           return yield* new StorageError({
-            message: message !== undefined && message !== "" ? message : "Hugging Face rejected this file",
+            message:
+              message !== undefined && message !== "" ? message : "Hugging Face rejected this file",
           })
         }
         const upload = object.actions?.upload
@@ -243,14 +315,23 @@ export class HuggingFace extends Context.Service<HuggingFace, {
               }
               urls.set(Number(name), value)
             }
-            if (!Number.isInteger(chunkSize) || chunkSize <= 0 || urls.size !== plan.length || plan.length === 0) {
-              return yield* new StorageError({ message: "Hugging Face returned an unexpected upload plan" })
+            if (
+              !Number.isInteger(chunkSize) ||
+              chunkSize <= 0 ||
+              urls.size !== plan.length ||
+              plan.length === 0
+            ) {
+              return yield* new StorageError({
+                message: "Hugging Face returned an unexpected upload plan",
+              })
             }
             const parts: Array<{ readonly etag: string; readonly partNumber: number }> = []
             for (const part of plan) {
               const href = urls.get(part.number)
               if (href === undefined) {
-                return yield* new StorageError({ message: "Hugging Face returned an unexpected upload plan" })
+                return yield* new StorageError({
+                  message: "Hugging Face returned an unexpected upload plan",
+                })
               }
               const uploaded = yield* putRange(href, path, part.offset, part.length)
               const etag = uploaded.headers["etag"]
@@ -264,7 +345,9 @@ export class HuggingFace extends Context.Service<HuggingFace, {
               HttpClientRequest.setHeader("accept", "application/vnd.git-lfs+json"),
               HttpClientRequest.setHeader("content-type", "application/vnd.git-lfs+json"),
               raw.execute,
-              Effect.mapError(() => new StorageError({ message: "Hugging Face LFS transfer failed" })),
+              Effect.mapError(
+                () => new StorageError({ message: "Hugging Face LFS transfer failed" }),
+              ),
             )
             if (completed.status < 200 || completed.status >= 300) {
               return yield* rejected(completed)
@@ -279,12 +362,18 @@ export class HuggingFace extends Context.Service<HuggingFace, {
             const request = yield* HttpClientRequest.put(upload.href).pipe(
               HttpClientRequest.setHeaders(stringHeaders),
               HttpClientRequest.bodyFile(path),
-              Effect.mapError(() => new StorageError({ message: "Hugging Face LFS transfer failed" })),
+              Effect.mapError(
+                () => new StorageError({ message: "Hugging Face LFS transfer failed" }),
+              ),
               Effect.provideService(FileSystem.FileSystem, fs),
             )
-            const transferred = yield* raw.execute(request).pipe(
-              Effect.mapError(() => new StorageError({ message: "Hugging Face LFS transfer failed" })),
-            )
+            const transferred = yield* raw
+              .execute(request)
+              .pipe(
+                Effect.mapError(
+                  () => new StorageError({ message: "Hugging Face LFS transfer failed" }),
+                ),
+              )
             if (transferred.status < 200 || transferred.status >= 300) {
               return yield* rejected(transferred)
             }
@@ -318,8 +407,12 @@ export class HuggingFace extends Context.Service<HuggingFace, {
       }
 
       // Lists a dataset tree and treats a missing path as an empty folder rather than a hard failure.
-      const list = Effect.fn("HuggingFace.list")(function*(folder: string, recursive: boolean) {
-        const encoded = folder.split("/").filter((part) => part !== "").map(encodeURIComponent).join("/")
+      const list = Effect.fn("HuggingFace.list")(function* (folder: string, recursive: boolean) {
+        const encoded = folder
+          .split("/")
+          .filter((part) => part !== "")
+          .map(encodeURIComponent)
+          .join("/")
         const target = targetFor(encoded === "" ? "/tree/main" : `/tree/main/${encoded}`)
         if (target === undefined) {
           return yield* unavailable("huggingface")
@@ -340,10 +433,16 @@ export class HuggingFace extends Context.Service<HuggingFace, {
             return { files: [], folders: [], truncated: false }
           }
           if (response.status < 200 || response.status >= 300) {
-            return yield* new StorageError({ message: `Hugging Face list failed (${response.status})` })
+            return yield* new StorageError({
+              message: `Hugging Face list failed (${response.status})`,
+            })
           }
-          const items = yield* HttpClientResponse.schemaBodyJson(Schema.Array(TreeItem))(response).pipe(
-            Effect.mapError(() => new StorageError({ message: "Could not parse the Hugging Face list" })),
+          const items = yield* HttpClientResponse.schemaBodyJson(Schema.Array(TreeItem))(
+            response,
+          ).pipe(
+            Effect.mapError(
+              () => new StorageError({ message: "Could not parse the Hugging Face list" }),
+            ),
           )
           for (const item of items) {
             if (item.type === "directory") {
@@ -374,7 +473,7 @@ export class HuggingFace extends Context.Service<HuggingFace, {
       })
 
       // Opens a dataset file as a byte stream so a download does not hold the whole file in memory.
-      const open = Effect.fn("HuggingFace.open")(function*(key: string) {
+      const open = Effect.fn("HuggingFace.open")(function* (key: string) {
         const target = targetFor("")
         if (target === undefined) {
           return yield* unavailable("huggingface")
@@ -393,7 +492,7 @@ export class HuggingFace extends Context.Service<HuggingFace, {
       })
 
       // Downloads a dataset file by its storage key for moves between folders.
-      const get = Effect.fn("HuggingFace.get")(function*(key: string) {
+      const get = Effect.fn("HuggingFace.get")(function* (key: string) {
         const target = targetFor("")
         if (target === undefined) {
           return yield* unavailable("huggingface")
@@ -413,7 +512,7 @@ export class HuggingFace extends Context.Service<HuggingFace, {
       })
 
       // Deletes a path with a commit so an empty folder marker or a moved file leaves the dataset.
-      const remove = Effect.fn("HuggingFace.delete")(function*(key: string) {
+      const remove = Effect.fn("HuggingFace.delete")(function* (key: string) {
         yield* commit([
           { key: "header", value: { description: "", summary: "delete" } },
           { key: "deletedFile", value: { path: key } },
@@ -421,11 +520,13 @@ export class HuggingFace extends Context.Service<HuggingFace, {
       })
 
       // Reads the dataset metadata so the source list can show the repo when the token works.
-      const status = Effect.fn("HuggingFace.status")(function*() {
+      const status = Effect.fn("HuggingFace.status")(function* () {
         if (config.huggingface === undefined) {
           return "Not configured"
         }
-        yield* HttpClientRequest.get(`https://huggingface.co/api/datasets/${config.huggingface.repo}`).pipe(
+        yield* HttpClientRequest.get(
+          `https://huggingface.co/api/datasets/${config.huggingface.repo}`,
+        ).pipe(
           HttpClientRequest.bearerToken(Redacted.value(config.huggingface.token)),
           http.execute,
           Effect.mapError(() => new StorageError({ message: "Hugging Face did not respond" })),

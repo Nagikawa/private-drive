@@ -1,7 +1,12 @@
 import { describe, expect, it } from "@effect/vitest"
 import { Effect, Schema } from "effect"
 import { CatalogData, StoredFile, StoredFolder } from "../src/index/schema.ts"
-import { addEntry, rememberFolder, rememberFolderTree, replaceCatalog } from "../src/index/update.ts"
+import {
+  addEntry,
+  rememberFolder,
+  rememberFolderTree,
+  replaceCatalog,
+} from "../src/index/update.ts"
 
 const empty = new CatalogData({ entries: [], folders: [], version: 1 })
 
@@ -25,7 +30,8 @@ describe("catalog updates", () => {
       expect(rememberFolder(once, "r2", "").map((folder) => folder.path)).toEqual(["img"])
       const tree = rememberFolderTree([], "huggingface", "img/scene/hong")
       expect(tree.map((folder) => folder.path)).toEqual(["img", "img/scene", "img/scene/hong"])
-    }))
+    }),
+  )
 
   // The previous snapshot stays intact after a row is appended.
   it.effect("copies entries when a row is added", () =>
@@ -36,18 +42,24 @@ describe("catalog updates", () => {
       const replaced = replaceCatalog(next, [], [new StoredFolder({ path: "img", source: "r2" })])
       expect(next.folders).toEqual([])
       expect(replaced.folders.map((folder) => folder.path)).toEqual(["img"])
-    }))
+    }),
+  )
 
   // The on-disk document is version 1. Anything else is not an index.
   it.effect("rejects a catalog that is not version 1", () =>
-    Effect.gen(function*() {
-      const decoded = yield* Schema.decodeUnknownEffect(CatalogData)({ entries: [], folders: [], version: 1 }).pipe(
-        Effect.result,
-      )
+    Effect.gen(function* () {
+      const decoded = yield* Schema.decodeUnknownEffect(CatalogData)({
+        entries: [],
+        folders: [],
+        version: 1,
+      }).pipe(Effect.result)
       expect(decoded._tag).toBe("Success")
-      const rejected = yield* Schema.decodeUnknownEffect(CatalogData)({ entries: [], folders: [], version: 2 }).pipe(
-        Effect.result,
-      )
+      const rejected = yield* Schema.decodeUnknownEffect(CatalogData)({
+        entries: [],
+        folders: [],
+        version: 2,
+      }).pipe(Effect.result)
       expect(rejected._tag).toBe("Failure")
-    }))
+    }),
+  )
 })

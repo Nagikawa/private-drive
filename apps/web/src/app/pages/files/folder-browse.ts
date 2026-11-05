@@ -1,6 +1,14 @@
 import { Effect } from 'effect';
 import type { Listing, SourceId } from '@private-drive/domain';
-import { EMPTY, combineLatest, debounceTime, distinctUntilChanged, startWith, switchMap, type Observable } from 'rxjs';
+import {
+  EMPTY,
+  combineLatest,
+  debounceTime,
+  distinctUntilChanged,
+  startWith,
+  switchMap,
+  type Observable,
+} from 'rxjs';
 import type { DriveServices } from '../../services/drive-runtime/drive-runtime.service';
 import { parseFileSort, type FileSort } from './file-sort';
 
@@ -12,7 +20,13 @@ export interface BrowseState {
   hasNext: boolean;
 }
 
-export const emptyBrowse: BrowseState = { listing: undefined, error: '', page: 1, hasPrev: false, hasNext: false };
+export const emptyBrowse: BrowseState = {
+  listing: undefined,
+  error: '',
+  page: 1,
+  hasPrev: false,
+  hasNext: false,
+};
 
 // Pages one folder. The cursor stack resets when the folder, search, or sort changes.
 export const watchFolderListing = (input: {
@@ -64,41 +78,43 @@ export const watchFolderListing = (input: {
           }
           const cursor = history[index];
           return input.bind(
-            input.load({
-              source,
-              folder,
-              search,
-              kind: 'all',
-              recursive: 'false',
-              sort: parsed.sort,
-              order: parsed.order,
-              ...(cursor === undefined ? {} : { cursor }),
-            }).pipe(
-              Effect.tap((listing) =>
-                Effect.sync(() => {
-                  input.onLoaded();
-                  if (listing.next !== undefined) {
-                    history[index + 1] = listing.next;
-                  }
-                }),
-              ),
-              Effect.map((listing): BrowseState => ({
-                listing,
-                error: '',
-                page: index + 1,
-                hasPrev: index > 0,
-                hasNext: listing.next !== undefined,
-              })),
-              Effect.catch((error) =>
-                Effect.succeed<BrowseState>({
-                  listing: undefined,
-                  error: error.message,
+            input
+              .load({
+                source,
+                folder,
+                search,
+                kind: 'all',
+                recursive: 'false',
+                sort: parsed.sort,
+                order: parsed.order,
+                ...(cursor === undefined ? {} : { cursor }),
+              })
+              .pipe(
+                Effect.tap((listing) =>
+                  Effect.sync(() => {
+                    input.onLoaded();
+                    if (listing.next !== undefined) {
+                      history[index + 1] = listing.next;
+                    }
+                  }),
+                ),
+                Effect.map((listing): BrowseState => ({
+                  listing,
+                  error: '',
                   page: index + 1,
-                  hasPrev: false,
-                  hasNext: false,
-                }),
+                  hasPrev: index > 0,
+                  hasNext: listing.next !== undefined,
+                })),
+                Effect.catch((error) =>
+                  Effect.succeed<BrowseState>({
+                    listing: undefined,
+                    error: error.message,
+                    page: index + 1,
+                    hasPrev: false,
+                    hasNext: false,
+                  }),
+                ),
               ),
-            ),
           );
         }),
       );

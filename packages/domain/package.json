@@ -7,7 +7,9 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "test": "vitest run"
+    "test": "vitest run",
+    "lint": "pnpm exec oxlint .",
+    "lint:fix": "pnpm exec oxlint --fix ."
   },
   "dependencies": {
     "effect": "^4.1.1"

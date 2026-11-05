@@ -19,7 +19,9 @@ describe('ConfirmDelete', () => {
     fixture.componentInstance.open('Delete file', 'Delete notes.txt?');
     fixture.detectChanges();
     expect(fixture.nativeElement.textContent).toContain('Delete notes.txt?');
-    const [cancel, accept] = fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>;
+    const [cancel, accept] = fixture.nativeElement.querySelectorAll(
+      'button',
+    ) as NodeListOf<HTMLButtonElement>;
     accept?.click();
     cancel?.click();
     expect(results).toEqual([true, false]);

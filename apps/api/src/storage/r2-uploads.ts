@@ -10,7 +10,10 @@ let chain = Promise.resolve()
 // One process can start two large uploads. Their journal edits have to stay in order.
 const exclusive = <A>(run: () => Promise<A>): Promise<A> => {
   const result = chain.then(run, run)
-  chain = result.then(() => undefined, () => undefined)
+  chain = result.then(
+    () => undefined,
+    () => undefined,
+  )
   return result
 }
 
@@ -26,7 +29,12 @@ const parse = (text: string): Array<PendingUpload> => {
         continue
       }
       const { key, uploadId } = item
-      if (typeof key === "string" && typeof uploadId === "string" && key !== "" && uploadId !== "") {
+      if (
+        typeof key === "string" &&
+        typeof uploadId === "string" &&
+        key !== "" &&
+        uploadId !== ""
+      ) {
         uploads.push({ key, uploadId })
       }
     }

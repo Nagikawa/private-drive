@@ -11,6 +11,8 @@ describe('Files', () => {
     });
     const fixture = TestBed.createComponent(Files);
     fixture.detectChanges();
-    expect(fixture.nativeElement.querySelector('input[placeholder="Search files..."]')).not.toBeNull();
+    expect(
+      fixture.nativeElement.querySelector('input[placeholder="Search files..."]'),
+    ).not.toBeNull();
   });
 });

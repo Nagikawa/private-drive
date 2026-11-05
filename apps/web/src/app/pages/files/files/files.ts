@@ -166,7 +166,9 @@ export class Files {
     return `${paused.name} paused at ${paused.offset} of ${paused.size} bytes. Upload the same file to continue.`;
   });
 
-  protected readonly hasSelection = computed(() => this.selected().length > 0 || this.selectedFolders().length > 0);
+  protected readonly hasSelection = computed(
+    () => this.selected().length > 0 || this.selectedFolders().length > 0,
+  );
 
   // Opens a folder in the right pane by updating the query string.
   protected openFolder(path: string): void {
@@ -178,12 +180,16 @@ export class Files {
 
   // Adds or removes one file from the selection.
   protected toggle(id: string, checked: boolean): void {
-    this.selected.update((current) => (checked ? [...current, id] : current.filter((item) => item !== id)));
+    this.selected.update((current) =>
+      checked ? [...current, id] : current.filter((item) => item !== id),
+    );
   }
 
   // Adds or removes one folder from the selection.
   protected toggleFolder(path: string, checked: boolean): void {
-    this.selectedFolders.update((current) => (checked ? [...current, path] : current.filter((item) => item !== path)));
+    this.selectedFolders.update((current) =>
+      checked ? [...current, path] : current.filter((item) => item !== path),
+    );
   }
 
   // Selects every file in the current list, or clears that selection.
@@ -207,7 +213,10 @@ export class Files {
   // Highlights a tree folder while a file is dragged over it.
   protected onFolderDragOver(event: DragEvent, path: string): void {
     const types = event.dataTransfer?.types;
-    if (this.draggingId === '' && (types === undefined || !Array.from(types).includes(fileDragType))) {
+    if (
+      this.draggingId === '' &&
+      (types === undefined || !Array.from(types).includes(fileDragType))
+    ) {
       return;
     }
     event.preventDefault();

@@ -12,7 +12,8 @@ describe("HTTP routes", () => {
       const response = await handler(new Request("http://127.0.0.1/health"))
       expect(response.status).toBe(200)
       expect(await response.json()).toEqual({ ok: true })
-    }))
+    }),
+  )
 
   // The counter uses method and status, and the body is plain text.
   it.effect("counts responses on the metrics route", () =>
@@ -24,6 +25,9 @@ describe("HTTP routes", () => {
       await handler(new Request("http://127.0.0.1/metrics"))
       const second = await handler(new Request("http://127.0.0.1/metrics"))
       expect(second.status).toBe(200)
-      expect(await second.text()).toContain('private_drive_http_responses{method="GET",status="200"}')
-    }))
+      expect(await second.text()).toContain(
+        'private_drive_http_responses{method="GET",status="200"}',
+      )
+    }),
+  )
 })

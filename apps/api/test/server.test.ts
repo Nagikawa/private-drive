@@ -8,14 +8,17 @@ import { configFor, tempDirectory } from "./support.ts"
 describe("Server", () => {
   // The process answers health, hides files from an anonymous caller, and rejects a bad password.
   it.effect("serves health, a protected file route, and login", () =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const directory = yield* tempDirectory
       const scope = yield* Scope.make()
       yield* Effect.addFinalizer(() => Scope.close(scope, Exit.void))
       const port = 18_791
-      yield* Layer.buildWithScope(Server.pipe(
-        Layer.provide(configFor(join(directory, "index.json"), { PORT: String(port) })),
-      ), scope)
+      yield* Layer.buildWithScope(
+        Server.pipe(
+          Layer.provide(configFor(join(directory, "index.json"), { PORT: String(port) })),
+        ),
+        scope,
+      )
       const health = yield* Effect.tryPromise({
         try: () => fetch(`http://127.0.0.1:${port}/health`),
         catch: () => new Error("Health request failed"),
@@ -42,7 +45,8 @@ describe("Server", () => {
       })
       expect(signed.status).toBe(404)
       const chunk = yield* Effect.tryPromise({
-        try: () => fetch(`http://127.0.0.1:${port}/api/uploads/sessions/missing`, { method: "PUT" }),
+        try: () =>
+          fetch(`http://127.0.0.1:${port}/api/uploads/sessions/missing`, { method: "PUT" }),
         catch: () => new Error("Upload chunk request failed"),
       })
       expect(chunk.status).toBe(401)
@@ -56,5 +60,6 @@ describe("Server", () => {
         catch: () => new Error("Login request failed"),
       })
       expect(login.status).toBe(401)
-    }))
+    }),
+  )
 })

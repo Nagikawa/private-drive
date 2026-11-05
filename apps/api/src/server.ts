@@ -19,10 +19,7 @@ import { UploadChunkRoute } from "./http/upload-chunk.ts"
 
 // JSON routes and the raw content route share one drive layer so the index lock is process-wide.
 const Routes = Layer.mergeAll(
-  HttpApiBuilder.layer(Api).pipe(
-    Layer.provide(FilesHandlers),
-    Layer.provide(SessionHandlers),
-  ),
+  HttpApiBuilder.layer(Api).pipe(Layer.provide(FilesHandlers), Layer.provide(SessionHandlers)),
   ContentRoute,
   HealthRoute,
   MetricsRoute,
@@ -31,7 +28,7 @@ const Routes = Layer.mergeAll(
 
 // Reads the port, then launches HTTP with auth, the drive, and the platform services underneath.
 export const Server = Layer.unwrap(
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     const config = yield* AppConfig
     yield* Effect.logInfo(`私人網盤 API 監聽 ${config.port}`)
     return HttpRouter.serve(Routes, { middleware: recordResponses }).pipe(

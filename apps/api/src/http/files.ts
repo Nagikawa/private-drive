@@ -13,23 +13,29 @@ interface UploadBody {
 export const FilesHandlers = HttpApiBuilder.group(
   Api,
   "files",
-  Effect.fn("FilesHandlers")(function*(handlers) {
+  Effect.fn("FilesHandlers")(function* (handlers) {
     const drive = yield* Drive
     const uploads = yield* Uploads
     const fs = yield* FileSystem.FileSystem
 
     // Stats the temporary multipart file and passes its path through, so a large body is streamed from disk.
-    const upload = Effect.fn("FilesHandlers.upload")(function*(payload: UploadBody) {
-      const info = yield* fs.stat(payload.file.path).pipe(
-        Effect.mapError(() => new StorageError({ message: "Could not read the uploaded temporary file" })),
-      )
+    const upload = Effect.fn("FilesHandlers.upload")(function* (payload: UploadBody) {
+      const info = yield* fs
+        .stat(payload.file.path)
+        .pipe(
+          Effect.mapError(
+            () => new StorageError({ message: "Could not read the uploaded temporary file" }),
+          ),
+        )
       const size = yield* Option.match(ByteSize.toNumber(info.size), {
-        onNone: () => Effect.fail(new StorageError({ message: "The uploaded file is too large to index" })),
+        onNone: () =>
+          Effect.fail(new StorageError({ message: "The uploaded file is too large to index" })),
         onSome: Effect.succeed,
       })
-      const contentType = payload.file.contentType === "" || payload.file.contentType === "application/octet-stream"
-        ? yield* contentTypeFromName(payload.file.name)
-        : payload.file.contentType
+      const contentType =
+        payload.file.contentType === "" || payload.file.contentType === "application/octet-stream"
+          ? yield* contentTypeFromName(payload.file.name)
+          : payload.file.contentType
       return yield* drive.upload({
         contentType,
         folder: payload.folder,

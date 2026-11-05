@@ -10,7 +10,9 @@ describe('Breadcrumbs', () => {
     fixture.componentInstance.opened.subscribe((path) => opened.push(path));
     fixture.componentRef.setInput('crumbs', [{ name: 'img', path: 'img' }]);
     fixture.detectChanges();
-    const buttons = fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>;
+    const buttons = fixture.nativeElement.querySelectorAll(
+      'button',
+    ) as NodeListOf<HTMLButtonElement>;
     buttons[0]?.click();
     buttons[1]?.click();
     expect(opened).toEqual(['', 'img']);

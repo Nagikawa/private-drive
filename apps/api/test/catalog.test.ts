@@ -22,10 +22,10 @@ const sample = new StoredFile({
 describe("Catalog", () => {
   // A second write keeps the previous JSON beside the new one, and a later read sees the new row.
   it.effect("writes the index and keeps a backup of the previous file", () =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const directory = yield* tempDirectory
       const indexPath = join(directory, "index.json")
-      const catalog = yield* Effect.gen(function*() {
+      const catalog = yield* Effect.gen(function* () {
         return yield* Catalog
       }).pipe(
         Effect.provide(Catalog.layer),
@@ -39,17 +39,18 @@ describe("Catalog", () => {
       })
       expect(added).toBe(1)
       const renamed = yield* catalog.modify((current) => {
-        const entries = current.entries.map((entry) =>
-          new StoredFile({
-            contentType: entry.contentType,
-            createdAt: entry.createdAt,
-            folder: entry.folder,
-            id: entry.id,
-            name: "b.txt",
-            size: entry.size,
-            source: entry.source,
-            storageKey: entry.storageKey,
-          })
+        const entries = current.entries.map(
+          (entry) =>
+            new StoredFile({
+              contentType: entry.contentType,
+              createdAt: entry.createdAt,
+              folder: entry.folder,
+              id: entry.id,
+              name: "b.txt",
+              size: entry.size,
+              source: entry.source,
+              storageKey: entry.storageKey,
+            }),
         )
         return [replaceCatalog(current, entries, current.folders), entries[0]?.name] as const
       })
@@ -61,5 +62,6 @@ describe("Catalog", () => {
         catch: () => new Error("Could not read the index backup"),
       })
       expect(backup).toContain("a.txt")
-    }))
+    }),
+  )
 })

@@ -55,7 +55,10 @@ export class FolderPrompt {
           dialog.close(name);
         }),
       catch: () => new SessionFailure({ message: 'Could not save the folder name' }),
-    }).pipe(Effect.catch(() => Effect.void), Effect.asVoid);
+    }).pipe(
+      Effect.catch(() => Effect.void),
+      Effect.asVoid,
+    );
     void Effect.runPromiseExit(program);
   }
 }

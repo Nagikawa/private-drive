@@ -34,7 +34,10 @@ const r2From = (
   bucket: string | undefined,
   secret: Redacted.Redacted<string> | undefined,
 ): R2Config | undefined =>
-  accountId !== undefined && accessKeyId !== undefined && bucket !== undefined && secret !== undefined
+  accountId !== undefined &&
+  accessKeyId !== undefined &&
+  bucket !== undefined &&
+  secret !== undefined
     ? { accessKeyId, accountId, bucket, secretAccessKey: secret }
     : undefined
 
@@ -52,20 +55,23 @@ const huggingfaceFrom = (
 ): HuggingFaceConfig | undefined =>
   repo !== undefined && token !== undefined ? { repo, token } : undefined
 
-export class AppConfig extends Context.Service<AppConfig, {
-  readonly authPassword: Redacted.Redacted<string>
-  readonly cookieSecure: boolean
-  readonly huggingface: HuggingFaceConfig | undefined
-  readonly indexPath: string
-  readonly port: number
-  readonly r2: R2Config | undefined
-  readonly sessionSecret: Redacted.Redacted<string>
-  readonly telegram: TelegramConfig | undefined
-}>()("private-drive/AppConfig") {
+export class AppConfig extends Context.Service<
+  AppConfig,
+  {
+    readonly authPassword: Redacted.Redacted<string>
+    readonly cookieSecure: boolean
+    readonly huggingface: HuggingFaceConfig | undefined
+    readonly indexPath: string
+    readonly port: number
+    readonly r2: R2Config | undefined
+    readonly sessionSecret: Redacted.Redacted<string>
+    readonly telegram: TelegramConfig | undefined
+  }
+>()("private-drive/AppConfig") {
   // Loads process env once so the rest of the API reads settings from this service.
   static readonly layer = Layer.effect(
     AppConfig,
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const env = yield* Config.all({
         authPassword: Config.Redacted("AUTH_PASSWORD"),
         cookieSecure: Config.Boolean("COOKIE_SECURE").pipe(Config.withDefault(false)),
@@ -88,7 +94,12 @@ export class AppConfig extends Context.Service<AppConfig, {
         huggingface: huggingfaceFrom(text(env.hfRepo), Option.getOrUndefined(env.hfToken)),
         indexPath: env.indexPath,
         port: env.port,
-        r2: r2From(text(env.r2AccountId), text(env.r2AccessKeyId), text(env.r2Bucket), Option.getOrUndefined(env.r2Secret)),
+        r2: r2From(
+          text(env.r2AccountId),
+          text(env.r2AccessKeyId),
+          text(env.r2Bucket),
+          Option.getOrUndefined(env.r2Secret),
+        ),
         sessionSecret: env.sessionSecret,
         telegram: telegramFrom(text(env.tgChatId), Option.getOrUndefined(env.tgToken)),
       })
