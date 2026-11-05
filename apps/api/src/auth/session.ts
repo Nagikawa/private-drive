@@ -1,4 +1,5 @@
-import { Account, CurrentAccount, Session, Unauthorized } from '@private-drive/domain';
+import { CurrentAccount, Session } from '@private-drive/domain';
+import { Account, Unauthorized } from '@private-drive/model';
 import * as DateTime from 'effect/DateTime';
 import * as Effect from 'effect/Effect';
 import * as Layer from 'effect/Layer';

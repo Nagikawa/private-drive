@@ -1,4 +1,4 @@
-import { NotFound, StorageError } from '@private-drive/domain';
+import { NotFound, StorageError } from '@private-drive/model';
 import * as DateTime from 'effect/DateTime';
 import * as Effect from 'effect/Effect';
 import * as HttpRouter from 'effect/http/HttpRouter';

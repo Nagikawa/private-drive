@@ -1,4 +1,5 @@
-import { Unauthorized } from '@private-drive/domain';
+import { Unauthorized, type SessionBook } from '@private-drive/model';
+import { activeSessions, pure, sessionBook } from '@private-drive/utils';
 import * as Context from 'effect/Context';
 import * as Effect from 'effect/Effect';
 import * as FileSystem from 'effect/FileSystem';
@@ -13,8 +14,6 @@ import { open, readFile, rm, writeFile } from 'node:fs/promises';
 import { AppConfig } from '../config.ts';
 import { issueSession, sessionClaims, sessionLifetime } from './session.ts';
 
-type Book = Record<string, number>;
-
 // A lock held by a process that no longer exists can be removed.
 const ownerAlive = (pid: number): boolean => {
 	try {
@@ -23,38 +22,6 @@ const ownerAlive = (pid: number): boolean => {
 	} catch (cause) {
 		return Predicate.hasProperty(cause, 'code') && cause.code === 'EPERM';
 	}
-};
-
-const parseBook = (text: string): Book => {
-	try {
-		const value: unknown = JSON.parse(text);
-		if (typeof value !== 'object' || value === null || !('sessions' in value)) {
-			return {};
-		}
-		const sessions = value.sessions;
-		if (typeof sessions !== 'object' || sessions === null) {
-			return {};
-		}
-		const book: Book = {};
-		for (const [nonce, expiresAt] of Object.entries(sessions)) {
-			if (typeof expiresAt === 'number' && Number.isFinite(expiresAt)) {
-				book[nonce] = expiresAt;
-			}
-		}
-		return book;
-	} catch {
-		return {};
-	}
-};
-
-const activeBook = (book: Book, now: number): Book => {
-	const next: Book = {};
-	for (const [nonce, expiresAt] of Object.entries(book)) {
-		if (expiresAt > now) {
-			next[nonce] = expiresAt;
-		}
-	}
-	return next;
 };
 
 // Remembers which session nonces are still allowed, so logout can reject a cookie before it expires.
@@ -135,10 +102,10 @@ export class SessionLedger extends Context.Service<
 				const text = yield* fs
 					.readFileString(bookPath)
 					.pipe(Effect.catch(() => Effect.succeed('')));
-				return parseBook(text);
+				return yield* sessionBook(text);
 			});
 
-			const save = Effect.fn('SessionLedger.save')(function* (book: Book) {
+			const save = Effect.fn('SessionLedger.save')(function* (book: SessionBook) {
 				yield* fs
 					.makeDirectory(path.dirname(bookPath), { recursive: true })
 					.pipe(Effect.mapError(() => 'Could not create the session directory'));
@@ -153,7 +120,7 @@ export class SessionLedger extends Context.Service<
 			});
 
 			// Runs one ledger change while this process holds the lock.
-			const change = <A>(use: (book: Book) => readonly [Book, A]) =>
+			const change = <A>(use: (book: SessionBook) => readonly [SessionBook, A]) =>
 				Effect.acquireUseRelease(
 					acquire(),
 					() =>
@@ -172,7 +139,7 @@ export class SessionLedger extends Context.Service<
 					change((book) => {
 						const nonce = randomUUID();
 						const expiresAt = now + sessionLifetime;
-						const next = activeBook(book, now);
+						const next = pure(activeSessions(book, now), {});
 						next[nonce] = expiresAt;
 						return [next, issueSession(secret, expiresAt, nonce)] as const;
 					}).pipe(
@@ -192,7 +159,7 @@ export class SessionLedger extends Context.Service<
 				revoke: (token, now) =>
 					change((book) => {
 						const claims = sessionClaims(secret, token, now);
-						const next = activeBook(book, now);
+						const next = pure(activeSessions(book, now), {});
 						if (claims !== undefined) {
 							delete next[claims.nonce];
 						}

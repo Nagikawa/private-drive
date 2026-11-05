@@ -1,4 +1,5 @@
-import { StorageError, uploadChunkBytes } from '@private-drive/domain';
+import { StorageError } from '@private-drive/model';
+import { contentRange, uploadChunkBytes } from '@private-drive/utils';
 import * as DateTime from 'effect/DateTime';
 import * as Effect from 'effect/Effect';
 import * as Headers from 'effect/http/Headers';
@@ -9,8 +10,6 @@ import * as Option from 'effect/Option';
 
 import { SessionLedger } from '../auth/ledger.ts';
 import { Uploads } from '../drive/uploads.ts';
-
-const rangePattern = /^bytes (\d+)-(\d+)\/(\d+)$/;
 
 // Writes one slice of a resumable upload. The client sends the next byte the server asked for.
 const appendChunk = Effect.fn('appendChunk')(function* () {
@@ -28,12 +27,14 @@ const appendChunk = Effect.fn('appendChunk')(function* () {
 		return HttpServerResponse.text('Upload not found', { status: 404 });
 	}
 	const header = Option.getOrUndefined(Headers.get(request.headers, 'content-range')) ?? '';
-	const match = rangePattern.exec(header);
-	if (match === null) {
+	const range = yield* contentRange(header).pipe(
+		Effect.catchTag('ContentRangeError', () => Effect.succeed(undefined)),
+	);
+	if (range === undefined) {
 		return HttpServerResponse.text('Content-Range is required', { status: 400 });
 	}
-	const start = Number(match[1]);
-	const end = Number(match[2]);
+	const start = range.start;
+	const end = range.end;
 	const buffer = yield* request.arrayBuffer.pipe(Effect.catch(() => Effect.succeed(undefined)));
 	if (buffer === undefined) {
 		return HttpServerResponse.text('Could not read the upload chunk', { status: 400 });

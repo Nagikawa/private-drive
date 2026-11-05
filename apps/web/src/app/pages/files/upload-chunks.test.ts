@@ -1,8 +1,8 @@
 import * as Vitest from '@effect/vitest';
-import { FileEntry, UploadProgress } from '@private-drive/domain';
+import { FileEntry, UploadProgress } from '@private-drive/model';
+import { NetworkFailure } from '@private-drive/model';
 import * as Effect from 'effect/Effect';
 
-import { NetworkFailure } from '../../core/drive-error';
 import { ApiClient } from '../../services/drive-runtime/drive-runtime.service';
 import { uploadChunked, type ResumableUpload } from './upload-chunks';
 

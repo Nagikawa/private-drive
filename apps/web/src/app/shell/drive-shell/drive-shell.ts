@@ -9,10 +9,11 @@ import {
 } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { Router, RouterLink, RouterOutlet } from '@angular/router';
-import { connectedResource, pure, type SourceId, type SourceStatus } from '@private-drive/domain';
+import { SessionFailure, type SourceId, type SourceStatus } from '@private-drive/model';
+import { connectedResource } from '@private-drive/policy';
+import { pure } from '@private-drive/utils';
 import * as Effect from 'effect/Effect';
 
-import { SessionFailure } from '../../core/drive-error';
 import { DriveApi } from '../../services/drive-api/drive-api.service';
 import { DriveRuntime } from '../../services/drive-runtime/drive-runtime.service';
 import { Notices } from '../../services/notices/notices.service';

@@ -12,6 +12,7 @@
 		"lint:fix": "pnpm exec oxlint --fix ."
 	},
 	"dependencies": {
+		"@private-drive/model": "workspace:*",
 		"effect": "^4.1.1"
 	},
 	"devDependencies": {

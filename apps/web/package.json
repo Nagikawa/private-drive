@@ -21,6 +21,9 @@
 		"@angular/platform-browser": "^22.0.0",
 		"@angular/router": "^22.0.0",
 		"@private-drive/domain": "workspace:*",
+		"@private-drive/model": "workspace:*",
+		"@private-drive/policy": "workspace:*",
+		"@private-drive/utils": "workspace:*",
 		"effect": "4.1.1",
 		"rxjs": "~7.8.0",
 		"tslib": "^2.3.0"

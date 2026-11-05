@@ -1,4 +1,6 @@
-import { Api, StorageError, contentTypeFromName, type SourceId } from '@private-drive/domain';
+import { Api } from '@private-drive/domain';
+import { StorageError, type SourceId } from '@private-drive/model';
+import { contentTypeFromName } from '@private-drive/utils';
 import * as ByteSize from 'effect/ByteSize';
 import * as Effect from 'effect/Effect';
 import * as FileSystem from 'effect/FileSystem';

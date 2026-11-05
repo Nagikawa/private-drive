@@ -1,9 +1,8 @@
+import { keepName, labels, limits } from '@private-drive/model';
 import * as Effect from 'effect/Effect';
 
 import type { FileStore } from './file-store.ts';
 import type { R2 } from './r2.ts';
-
-import { keepName, labels, limits } from './shared.ts';
 
 // Adapts the R2 client to the store Drive calls. Bucket commands stay in the R2 service.
 export const r2Store = (r2: R2['Service']): FileStore => ({

@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { FileEntry } from '@private-drive/domain';
+import { FileEntry } from '@private-drive/model';
 
 import { driveProviders } from '../../../../testing/runtime';
 import { PreviewDialog } from './preview-dialog';

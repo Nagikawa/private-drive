@@ -1,7 +1,7 @@
 import { CdkVirtualScrollViewport } from '@angular/cdk/scrolling';
 import { TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
-import { FileEntry, Listing } from '@private-drive/domain';
+import { FileEntry, Listing } from '@private-drive/model';
 
 import { FilePane } from './file-pane';
 

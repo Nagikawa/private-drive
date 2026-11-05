@@ -1,5 +1,7 @@
+import type { FileEntry } from '@private-drive/model';
+
 import { Component, ElementRef, inject, signal, viewChild } from '@angular/core';
-import { formatBytes, isImageContent, pure, type FileEntry } from '@private-drive/domain';
+import { formatBytes, isImageContent, pure } from '@private-drive/utils';
 
 import { DriveApi } from '../../../services/drive-api/drive-api.service';
 

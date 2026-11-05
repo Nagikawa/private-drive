@@ -1,7 +1,8 @@
+import type { FolderNode } from '@private-drive/utils';
+
 import { NgTemplateOutlet } from '@angular/common';
 import { Component, input, output } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { type FolderNode } from '@private-drive/domain';
 
 export interface FolderTreeDrag {
 	readonly event: DragEvent;

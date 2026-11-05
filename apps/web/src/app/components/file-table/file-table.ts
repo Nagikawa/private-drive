@@ -1,6 +1,8 @@
+import type { FileEntry } from '@private-drive/model';
+
 import { ScrollingModule } from '@angular/cdk/scrolling';
 import { Component, input, output } from '@angular/core';
-import { formatBytes as formatByteCount, pure, type FileEntry } from '@private-drive/domain';
+import { formatBytes as formatByteCount, pure } from '@private-drive/utils';
 
 export interface FileTableToggle {
 	readonly id: string;

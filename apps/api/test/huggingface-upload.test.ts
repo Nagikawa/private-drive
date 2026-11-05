@@ -97,7 +97,10 @@ Vitest.describe('Hugging Face large upload', () => {
 								transferEncoding,
 								url: request.url ?? '',
 							});
-							if (request.method === 'PUT' && (contentLength === undefined || transferEncoding !== undefined)) {
+							if (
+								request.method === 'PUT' &&
+								(contentLength === undefined || transferEncoding !== undefined)
+							) {
 								response.writeHead(501, { 'content-type': 'application/xml' });
 								response.end(xmlRejection);
 								return;

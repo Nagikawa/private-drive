@@ -1,6 +1,6 @@
 import { provideZonelessChangeDetection } from '@angular/core';
 import { provideRouter } from '@angular/router';
-import { Unauthorized } from '@private-drive/domain';
+import { Unauthorized } from '@private-drive/model';
 import * as Exit from 'effect/Exit';
 import { EMPTY } from 'rxjs';
 

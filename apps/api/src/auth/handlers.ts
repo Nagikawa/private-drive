@@ -1,11 +1,5 @@
-import {
-	Account,
-	Api,
-	CurrentAccount,
-	LoginPayload,
-	SessionCookie,
-	Unauthorized,
-} from '@private-drive/domain';
+import { Api, CurrentAccount, SessionCookie } from '@private-drive/domain';
+import { Account, LoginPayload, Unauthorized } from '@private-drive/model';
 import * as DateTime from 'effect/DateTime';
 import * as Effect from 'effect/Effect';
 import * as HttpApiBuilder from 'effect/http-api/HttpApiBuilder';

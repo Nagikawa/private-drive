@@ -83,7 +83,9 @@ export function captureVideoFrame(url: string): Promise<string> {
 		function onMetadata(): void {
 			const duration = video.duration;
 			const time =
-				Number.isFinite(duration) && duration > 0 ? Math.min(seekSeconds, duration / 2) : seekSeconds;
+				Number.isFinite(duration) && duration > 0
+					? Math.min(seekSeconds, duration / 2)
+					: seekSeconds;
 			video.addEventListener('seeked', onSeeked, { once: true });
 			try {
 				video.currentTime = time;

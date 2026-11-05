@@ -1,3 +1,27 @@
+import {
+	Account,
+	CompleteUpload,
+	DeletePayload,
+	DeleteResult,
+	FileEntry,
+	FolderEntry,
+	FolderPayload,
+	Listing,
+	LoginPayload,
+	MovePayload,
+	MoveResult,
+	NotFound,
+	OpenUpload,
+	RenamePayload,
+	ShareLink,
+	SharePayload,
+	SourceId,
+	SourceStatus,
+	StorageError,
+	Unauthorized,
+	UploadProgress,
+	UrlUploadPayload,
+} from '@private-drive/model';
 import * as HttpApi from 'effect/http-api/HttpApi';
 import * as HttpApiEndpoint from 'effect/http-api/HttpApiEndpoint';
 import * as HttpApiGroup from 'effect/http-api/HttpApiGroup';
@@ -5,30 +29,6 @@ import * as HttpApiSchema from 'effect/http-api/HttpApiSchema';
 import * as Multipart from 'effect/http/Multipart';
 import * as Schema from 'effect/Schema';
 
-import {
-	Account,
-	CompleteUpload,
-	OpenUpload,
-	DeletePayload,
-	DeleteResult,
-	FileEntry,
-	MovePayload,
-	MoveResult,
-	RenamePayload,
-	ShareLink,
-	SharePayload,
-	FolderEntry,
-	FolderPayload,
-	Listing,
-	LoginPayload,
-	NotFound,
-	SourceId,
-	SourceStatus,
-	StorageError,
-	Unauthorized,
-	UploadProgress,
-	UrlUploadPayload,
-} from './model.ts';
 import { Session } from './session.ts';
 
 const UploadPayload = Schema.Struct({

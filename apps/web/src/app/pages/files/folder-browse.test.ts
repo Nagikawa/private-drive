@@ -1,5 +1,5 @@
 import * as Vitest from '@effect/vitest';
-import { Listing } from '@private-drive/domain';
+import { Listing } from '@private-drive/model';
 import * as Effect from 'effect/Effect';
 import { Observable, of, Subject } from 'rxjs';
 

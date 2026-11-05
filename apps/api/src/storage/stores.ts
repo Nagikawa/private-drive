@@ -1,4 +1,4 @@
-import type { SourceId } from '@private-drive/domain';
+import type { SourceId } from '@private-drive/model';
 
 import * as Context from 'effect/Context';
 import * as Effect from 'effect/Effect';

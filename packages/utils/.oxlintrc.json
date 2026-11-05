@@ -1,0 +1,22 @@
+{
+	"$schema": "../../node_modules/oxlint/configuration_schema.json",
+	"categories": {
+		"correctness": "error"
+	},
+	"rules": {
+		// Effect.fn and Effect.gen are generators even when the body does not yield.
+		"require-yield": "off"
+	},
+	"env": {
+		"builtin": true,
+		"node": true
+	},
+	"overrides": [
+		{
+			"files": ["**/*.test.ts"],
+			"env": {
+				"vitest": true
+			}
+		}
+	]
+}

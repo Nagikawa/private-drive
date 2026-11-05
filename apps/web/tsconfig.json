@@ -18,7 +18,10 @@
 		"allowImportingTsExtensions": true,
 		"rewriteRelativeImportExtensions": true,
 		"paths": {
-			"@private-drive/domain": ["../../packages/domain/src/index.ts"]
+			"@private-drive/domain": ["../../packages/domain/src/index.ts"],
+			"@private-drive/model": ["../../packages/model/src/index.ts"],
+			"@private-drive/policy": ["../../packages/policy/src/index.ts"],
+			"@private-drive/utils": ["../../packages/utils/src/index.ts"]
 		}
 	},
 	"angularCompilerOptions": {

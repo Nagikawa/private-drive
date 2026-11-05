@@ -3,10 +3,11 @@ import {
 	OpenUpload,
 	StorageError,
 	UploadProgress,
-	normalizeFolder,
-	uploadChunkBytes,
 	type SourceId,
-} from '@private-drive/domain';
+	type StoredUpload,
+} from '@private-drive/model';
+import { normalizeFolder } from '@private-drive/policy';
+import { storedUploads, uploadChunkBytes } from '@private-drive/utils';
 import * as Context from 'effect/Context';
 import * as Effect from 'effect/Effect';
 import * as FileSystem from 'effect/FileSystem';
@@ -16,43 +17,6 @@ import { open, rm } from 'node:fs/promises';
 
 import { AppConfig } from '../config.ts';
 import { Drive } from './drive.ts';
-
-interface StoredUpload {
-	readonly contentType: string;
-	readonly folder: string;
-	readonly id: string;
-	readonly name: string;
-	readonly offset: number;
-	readonly path: string;
-	readonly size: number;
-	readonly source: SourceId;
-}
-
-const parse = (text: string): Array<StoredUpload> => {
-	try {
-		const value: unknown = JSON.parse(text);
-		if (!Array.isArray(value)) {
-			return [];
-		}
-		return value.filter((item): item is StoredUpload => {
-			if (typeof item !== 'object' || item === null) {
-				return false;
-			}
-			const row = item as Partial<StoredUpload>;
-			return row.source === 'r2' || row.source === 'telegram' || row.source === 'huggingface'
-				? typeof row.id === 'string' &&
-						typeof row.name === 'string' &&
-						typeof row.folder === 'string' &&
-						typeof row.path === 'string' &&
-						typeof row.contentType === 'string' &&
-						typeof row.offset === 'number' &&
-						typeof row.size === 'number'
-				: false;
-		});
-	} catch {
-		return [];
-	}
-};
 
 const progress = (upload: StoredUpload): UploadProgress =>
 	new UploadProgress({
@@ -97,7 +61,7 @@ export class Uploads extends Context.Service<
 				const text = yield* fs
 					.readFileString(bookPath)
 					.pipe(Effect.catch(() => Effect.succeed('')));
-				return parse(text);
+				return yield* storedUploads(text);
 			});
 
 			const save = Effect.fn('Uploads.save')(function* (uploads: ReadonlyArray<StoredUpload>) {

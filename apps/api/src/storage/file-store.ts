@@ -1,9 +1,7 @@
-import type { SourceId, StorageError } from '@private-drive/domain';
+import type { RemoteListing, SourceId, StorageError } from '@private-drive/model';
 
 import * as Effect from 'effect/Effect';
 import * as Stream from 'effect/Stream';
-
-import type { RemoteListing } from './shared.ts';
 
 // What a put returns. Telegram's key is a file id, not the folder path the caller asked for.
 export interface PlacedObject {

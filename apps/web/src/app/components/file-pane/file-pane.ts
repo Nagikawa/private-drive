@@ -1,3 +1,5 @@
+import type { FileEntry, Listing, SourceId } from '@private-drive/model';
+
 import { CdkVirtualScrollViewport, ScrollingModule } from '@angular/cdk/scrolling';
 import {
 	Component,
@@ -9,14 +11,7 @@ import {
 	signal,
 	viewChild,
 } from '@angular/core';
-import {
-	isVideoContent,
-	pure,
-	type FileEntry,
-	type FolderCrumb,
-	type Listing,
-	type SourceId,
-} from '@private-drive/domain';
+import { isVideoContent, pure, type FolderCrumb } from '@private-drive/utils';
 
 import { Breadcrumbs } from '../breadcrumbs/breadcrumbs';
 import { FileTable, type FileRowAction } from '../file-table/file-table';

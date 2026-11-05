@@ -1,14 +1,14 @@
 import {
-	uploadChunkBytes,
+	NetworkFailure,
+	type DriveFailure,
 	type FileEntry,
 	type SourceId,
 	type UploadProgress,
-} from '@private-drive/domain';
+} from '@private-drive/model';
+import { uploadChunkBytes } from '@private-drive/utils';
 import * as Effect from 'effect/Effect';
 
 import type { DriveServices } from '../../services/drive-runtime/drive-runtime.service';
-
-import { NetworkFailure, type DriveFailure } from '../../core/drive-error';
 
 // The slice of the API client an upload needs. Listing and login stay out of this path.
 export interface ResumableUpload {

@@ -1,9 +1,8 @@
+import { labels, limits, type RemoteListing } from '@private-drive/model';
 import * as Effect from 'effect/Effect';
 
 import type { FileStore } from './file-store.ts';
 import type { Telegram } from './telegram.ts';
-
-import { labels, limits, type RemoteListing } from './shared.ts';
 
 const emptyListing: RemoteListing = { files: [], folders: [], truncated: false };
 

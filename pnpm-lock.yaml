@@ -190,6 +190,15 @@ importers:
       '@private-drive/domain':
         specifier: workspace:*
         version: link:../../packages/domain
+      '@private-drive/model':
+        specifier: workspace:*
+        version: link:../../packages/model
+      '@private-drive/policy':
+        specifier: workspace:*
+        version: link:../../packages/policy
+      '@private-drive/utils':
+        specifier: workspace:*
+        version: link:../../packages/utils
       effect:
         specifier: ^4.1.1
         version: 4.1.1
@@ -236,6 +245,15 @@ importers:
       '@private-drive/domain':
         specifier: workspace:*
         version: link:../../packages/domain
+      '@private-drive/model':
+        specifier: workspace:*
+        version: link:../../packages/model
+      '@private-drive/policy':
+        specifier: workspace:*
+        version: link:../../packages/policy
+      '@private-drive/utils':
+        specifier: workspace:*
+        version: link:../../packages/utils
       effect:
         specifier: 4.1.1
         version: 4.1.1
@@ -282,6 +300,54 @@ importers:
 
   packages/domain:
     dependencies:
+      '@private-drive/model':
+        specifier: workspace:*
+        version: link:../model
+      effect:
+        specifier: ^4.1.1
+        version: 4.1.1
+    devDependencies:
+      '@effect/vitest':
+        specifier: ^4.1.2
+        version: 4.1.2(effect@4.1.1)(vitest@4.1.12(@types/node@24.19.2)(jsdom@28.1.0(supports-color@8.1.1))(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(sass-embedded@1.104.1)(sass@1.104.1)(tsx@4.23.15)))
+      vitest:
+        specifier: ^4.0.8
+        version: 4.1.12(@types/node@24.19.2)(jsdom@28.1.0(supports-color@8.1.1))(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(sass-embedded@1.104.1)(sass@1.104.1)(tsx@4.23.15))
+
+  packages/model:
+    dependencies:
+      effect:
+        specifier: ^4.1.1
+        version: 4.1.1
+    devDependencies:
+      '@effect/vitest':
+        specifier: ^4.1.2
+        version: 4.1.2(effect@4.1.1)(vitest@4.1.12(@types/node@24.19.2)(jsdom@28.1.0(supports-color@8.1.1))(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(sass-embedded@1.104.1)(sass@1.104.1)(tsx@4.23.15)))
+      vitest:
+        specifier: ^4.0.8
+        version: 4.1.12(@types/node@24.19.2)(jsdom@28.1.0(supports-color@8.1.1))(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(sass-embedded@1.104.1)(sass@1.104.1)(tsx@4.23.15))
+
+  packages/policy:
+    dependencies:
+      '@private-drive/model':
+        specifier: workspace:*
+        version: link:../model
+      effect:
+        specifier: ^4.1.1
+        version: 4.1.1
+    devDependencies:
+      '@effect/vitest':
+        specifier: ^4.1.2
+        version: 4.1.2(effect@4.1.1)(vitest@4.1.12(@types/node@24.19.2)(jsdom@28.1.0(supports-color@8.1.1))(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(sass-embedded@1.104.1)(sass@1.104.1)(tsx@4.23.15)))
+      vitest:
+        specifier: ^4.0.8
+        version: 4.1.12(@types/node@24.19.2)(jsdom@28.1.0(supports-color@8.1.1))(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(sass-embedded@1.104.1)(sass@1.104.1)(tsx@4.23.15))
+
+  packages/utils:
+    dependencies:
+      '@private-drive/model':
+        specifier: workspace:*
+        version: link:../model
       effect:
         specifier: ^4.1.1
         version: 4.1.1

@@ -1,6 +1,8 @@
+import type { Listing, SourceId } from '@private-drive/model';
+
 import { Component, ElementRef, computed, inject, output, signal, viewChild } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
-import { folderCrumbs, folderName, pure, type Listing, type SourceId } from '@private-drive/domain';
+import { folderCrumbs, folderName, pure } from '@private-drive/utils';
 import * as Effect from 'effect/Effect';
 import { Subject, of, startWith, switchMap } from 'rxjs';
 

@@ -1,5 +1,6 @@
-import type { Listing, SourceId } from '@private-drive/domain';
+import type { Listing, SourceId } from '@private-drive/model';
 
+import { parseFileSort, pure, type FileSort } from '@private-drive/utils';
 import * as Effect from 'effect/Effect';
 import {
 	EMPTY,
@@ -12,8 +13,6 @@ import {
 } from 'rxjs';
 
 import type { DriveServices } from '../../services/drive-runtime/drive-runtime.service';
-
-import { parseFileSort, type FileSort } from './file-sort';
 
 export interface BrowseState {
 	listing: Listing | undefined;
@@ -60,7 +59,7 @@ export const watchFolderListing = (input: {
 		input.refresh.pipe(startWith(undefined)),
 	]).pipe(
 		switchMap(([source, folder, search, sort]) => {
-			const parsed = parseFileSort(sort);
+			const parsed = pure(parseFileSort(sort), { order: 'asc' as const, sort: 'name' as const });
 			const history: Array<string | undefined> = [undefined];
 			let index = 0;
 			return input.turnPage.pipe(

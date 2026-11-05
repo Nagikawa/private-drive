@@ -8,24 +8,32 @@ import {
 	ShareLink,
 	SourceStatus,
 	StorageError,
+	keepName,
+	type SourceId,
+} from '@private-drive/model';
+import {
 	connectedResource,
+	nameKeepingType,
+	normalizeFolder,
+	sanitizeFileName,
+	telegramChatUrl,
+} from '@private-drive/policy';
+import {
 	contentTypeFromName,
 	fileId,
 	folderName,
 	isDirectChildFolder,
 	isImageContent,
 	isWithinFolder,
-	nameKeepingType,
-	normalizeFolder,
+	namesInFolder,
 	pageFiles,
 	pure,
 	readFileId,
-	sanitizeFileName,
 	splitStorageKey,
 	storageKey,
+	unavailable,
 	uniqueName,
-	type SourceId,
-} from '@private-drive/domain';
+} from '@private-drive/utils';
 import * as Context from 'effect/Context';
 import * as DateTime from 'effect/DateTime';
 import * as Effect from 'effect/Effect';
@@ -39,9 +47,7 @@ import type { FileStore } from '../storage/file-store.ts';
 import { AuditLog } from '../audit/log.ts';
 import { shareLifetime, signContent } from '../auth/share.ts';
 import { AppConfig } from '../config.ts';
-import { keepName, unavailable, type RemoteListing } from '../storage/shared.ts';
 import { Stores } from '../storage/stores.ts';
-import { telegramChatUrl } from '../storage/telegram-link.ts';
 import { downloadPublic } from './download.ts';
 
 // Rejects a folder string that could escape the drive root before any provider is called.
@@ -51,19 +57,8 @@ const requireFolder = Effect.fn('Drive.requireFolder')(function* (input: string)
 	);
 });
 
+// Array callbacks cannot yield, so an infallible key split is read here.
 const partsOf = (key: string) => pure(splitStorageKey(key), { folder: '', name: key });
-
-// Display names already stored in this folder, ignoring the empty-folder marker.
-const namesInFolder = (remote: RemoteListing, folder: string): Set<string> => {
-	const names = new Set<string>();
-	for (const file of remote.files) {
-		const parts = partsOf(file.key);
-		if (parts.folder === folder && parts.name !== keepName) {
-			names.add(parts.name);
-		}
-	}
-	return names;
-};
 
 // Turns a provider probe into a source card, including the unconfigured case the UI hides.
 const sourceStatus = Effect.fn('Drive.sourceStatus')(function* (
@@ -146,9 +141,7 @@ export class Drive extends Context.Service<
 			const config = yield* AppConfig;
 			const secret = Redacted.value(config.sessionSecret);
 			const telegramUrl =
-				config.telegram === undefined
-					? undefined
-					: yield* telegramChatUrl(config.telegram.chatId);
+				config.telegram === undefined ? undefined : yield* telegramChatUrl(config.telegram.chatId);
 			const fs = yield* FileSystem.FileSystem;
 			const stores = yield* Stores;
 
@@ -165,7 +158,7 @@ export class Drive extends Context.Service<
 					contentType: input.contentType,
 					createdAt: input.createdAt,
 					folder: input.folder,
-					id: fileId(input.source, input.key),
+					id: yield* fileId(input.source, input.key),
 					image: yield* isImageContent(input.contentType),
 					name: input.name,
 					size: input.size,
@@ -214,7 +207,7 @@ export class Drive extends Context.Service<
 				const remote = store.listsRemotely
 					? yield* store.list(folder, false)
 					: { files: [], folders: [], truncated: false };
-				const name = yield* uniqueName(safeName, namesInFolder(remote, folder));
+				const name = yield* uniqueName(safeName, yield* namesInFolder(remote, folder));
 				const key = yield* storageKey(folder, name);
 				const placed = yield* store.putFile(key, input.path, input.size, input.contentType);
 				const stamp = DateTime.formatIso(yield* DateTime.now);
@@ -291,7 +284,7 @@ export class Drive extends Context.Service<
 							: pure(isDirectChildFolder(folder, path), false)) &&
 						(query === '' || pure(folderName(path), path).toLowerCase().includes(query)),
 				);
-				const page = pageFiles(files, {
+				const page = yield* pageFiles(files, {
 					...(input.cursor === undefined ? {} : { cursor: input.cursor }),
 					order: input.order,
 					sort: input.sort,
@@ -351,7 +344,7 @@ export class Drive extends Context.Service<
 				list,
 				// Opens one file as a byte stream. The id is the source and storage key, not a catalog row.
 				read: Effect.fn('Drive.read')(function* (id: string) {
-					const parsed = readFileId(id);
+					const parsed = yield* readFileId(id);
 					if (parsed === undefined) {
 						return yield* new NotFound({ message: 'File not found' });
 					}
@@ -368,7 +361,7 @@ export class Drive extends Context.Service<
 				remove: Effect.fn('Drive.remove')(function* (ids: ReadonlyArray<string>) {
 					let removed = 0;
 					for (const id of ids) {
-						const parsed = readFileId(id);
+						const parsed = yield* readFileId(id);
 						if (parsed === undefined) {
 							continue;
 						}
@@ -391,7 +384,7 @@ export class Drive extends Context.Service<
 						readonly source: SourceId;
 					}> = [];
 					for (const id of ids) {
-						const parsed = readFileId(id);
+						const parsed = yield* readFileId(id);
 						if (parsed === undefined) {
 							return yield* new StorageError({ message: 'File not found' });
 						}
@@ -415,7 +408,7 @@ export class Drive extends Context.Service<
 						return yield* new StorageError({ message: 'Choose files from one source' });
 					}
 					const store = yield* requireListed(source);
-					const occupied = namesInFolder(yield* store.list(destination, false), destination);
+					const occupied = yield* namesInFolder(yield* store.list(destination, false), destination);
 					for (const file of pending) {
 						if (occupied.has(file.name)) {
 							return yield* new StorageError({
@@ -434,7 +427,7 @@ export class Drive extends Context.Service<
 				}),
 				// Renames one file while keeping its stored extension and content type.
 				rename: Effect.fn('Drive.rename')(function* (id: string, requested: string) {
-					const parsed = readFileId(id);
+					const parsed = yield* readFileId(id);
 					if (parsed === undefined) {
 						return yield* new StorageError({ message: 'File not found' });
 					}
@@ -454,7 +447,10 @@ export class Drive extends Context.Service<
 							source: parsed.source,
 						});
 					}
-					const occupied = namesInFolder(yield* store.list(current.folder, false), current.folder);
+					const occupied = yield* namesInFolder(
+						yield* store.list(current.folder, false),
+						current.folder,
+					);
 					if (occupied.has(name)) {
 						return yield* new StorageError({ message: `"${name}" already exists in this folder` });
 					}
@@ -473,7 +469,7 @@ export class Drive extends Context.Service<
 				}),
 				// Signs a one-hour content URL that works without the session cookie.
 				share: Effect.fn('Drive.share')(function* (id: string) {
-					const parsed = readFileId(id);
+					const parsed = yield* readFileId(id);
 					if (parsed === undefined) {
 						return yield* new NotFound({ message: 'File not found' });
 					}

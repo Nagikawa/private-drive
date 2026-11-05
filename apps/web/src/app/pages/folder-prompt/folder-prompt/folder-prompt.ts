@@ -1,8 +1,7 @@
 import { Component, ElementRef, output, signal, viewChild } from '@angular/core';
 import { form, FormField, required, submit } from '@angular/forms/signals';
+import { SessionFailure } from '@private-drive/model';
 import * as Effect from 'effect/Effect';
-
-import { SessionFailure } from '../../../core/drive-error';
 
 @Component({
 	selector: 'app-folder-prompt',

@@ -1,9 +1,11 @@
+import { StorageError, type RemoteFile, type RemoteListing } from '@private-drive/model';
 import {
-	StorageError,
+	bytesOf,
 	contentTypeFromName,
 	splitStorageKey,
+	unavailable,
 	uploadParts,
-} from '@private-drive/domain';
+} from '@private-drive/utils';
 import * as Context from 'effect/Context';
 import * as Effect from 'effect/Effect';
 import * as Base64 from 'effect/encoding/Base64';
@@ -20,7 +22,6 @@ import * as Stream from 'effect/Stream';
 import { createHash } from 'node:crypto';
 
 import { AppConfig } from '../config.ts';
-import { bytesOf, unavailable, type RemoteFile, type RemoteListing } from './shared.ts';
 
 export class HuggingFace extends Context.Service<
 	HuggingFace,
@@ -75,7 +76,8 @@ export class HuggingFace extends Context.Service<
 
 			// Stores a file inline when it is small, otherwise uploads the blob through LFS and commits the pointer.
 			const put = Effect.fn('HuggingFace.put')(function* (key: string, bytes: Uint8Array) {
-				if (bytesOf(bytes) <= 8 * 1024 * 1024) {
+				const size = yield* bytesOf(bytes);
+				if (size <= 8 * 1024 * 1024) {
 					yield* commit([
 						{ key: 'header', value: { description: '', summary: 'upload' } },
 						{
@@ -97,7 +99,7 @@ export class HuggingFace extends Context.Service<
 					HttpClientRequest.acceptJson,
 					HttpClientRequest.bodyJsonUnsafe({
 						hash_algo: 'sha256',
-						objects: [{ oid, size: bytesOf(bytes) }],
+						objects: [{ oid, size }],
 						operation: 'upload',
 						transfers: ['basic'],
 					}),
@@ -137,7 +139,7 @@ export class HuggingFace extends Context.Service<
 				}
 				yield* commit([
 					{ key: 'header', value: { description: '', summary: 'upload' } },
-					{ key: 'lfsFile', value: { algo: 'sha256', oid, path: key, size: bytesOf(bytes) } },
+					{ key: 'lfsFile', value: { algo: 'sha256', oid, path: key, size } },
 				]);
 			});
 
@@ -347,7 +349,7 @@ export class HuggingFace extends Context.Service<
 					const chunkRaw = header['chunk_size'];
 					if (chunkRaw !== undefined) {
 						const chunkSize = typeof chunkRaw === 'number' ? chunkRaw : Number(chunkRaw);
-						const plan = uploadParts(size, chunkSize);
+						const plan = yield* uploadParts(size, chunkSize);
 						const urls = new Map<number, string>();
 						for (const [name, value] of Object.entries(header)) {
 							if (!/^[0-9]+$/.test(name) || typeof value !== 'string' || value === '') {

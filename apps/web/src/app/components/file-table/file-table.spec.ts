@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { FileEntry } from '@private-drive/domain';
+import { FileEntry } from '@private-drive/model';
 
 import { FileTable } from './file-table';
 

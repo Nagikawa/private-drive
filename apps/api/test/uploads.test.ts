@@ -1,7 +1,7 @@
 import * as NodeFileSystem from '@effect/platform-node/NodeFileSystem';
 import * as NodePath from '@effect/platform-node/NodePath';
 import * as Vitest from '@effect/vitest';
-import { FileEntry, OpenUpload } from '@private-drive/domain';
+import { FileEntry, OpenUpload } from '@private-drive/model';
 import * as Effect from 'effect/Effect';
 import * as Layer from 'effect/Layer';
 import * as Result from 'effect/Result';

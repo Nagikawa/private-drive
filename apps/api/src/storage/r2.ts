@@ -11,14 +11,15 @@ import {
 	UploadPartCommand,
 	S3Client,
 } from '@aws-sdk/client-s3';
+import { StorageError, type RemoteFile, type RemoteListing } from '@private-drive/model';
 import {
-	StorageError,
 	contentTypeFromName,
 	parentFolder,
 	splitStorageKey,
+	unavailable,
 	uploadPartBytes,
 	uploadParts,
-} from '@private-drive/domain';
+} from '@private-drive/utils';
 import * as Context from 'effect/Context';
 import * as Effect from 'effect/Effect';
 import * as Layer from 'effect/Layer';
@@ -31,7 +32,6 @@ import { createReadStream } from 'node:fs';
 
 import { AppConfig } from '../config.ts';
 import { forgetUpload, readPendingUploads, rememberUpload } from './r2-uploads.ts';
-import { unavailable, type RemoteFile, type RemoteListing } from './shared.ts';
 
 export class R2 extends Context.Service<
 	R2,
@@ -192,7 +192,7 @@ export class R2 extends Context.Service<
 					return yield* unavailable('r2');
 				}
 				const bucket = config.r2.bucket;
-				const parts = uploadParts(size, uploadPartBytes(size));
+				const parts = yield* uploadParts(size, yield* uploadPartBytes(size));
 				if (parts.length <= 1) {
 					if (size === 0) {
 						yield* send(

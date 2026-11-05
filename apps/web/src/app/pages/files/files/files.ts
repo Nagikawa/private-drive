@@ -1,17 +1,11 @@
+import type { FileEntry, FolderEntry, SourceStatus, UploadProgress } from '@private-drive/model';
+
 import { Component, computed, inject, signal, viewChild } from '@angular/core';
 import { toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router } from '@angular/router';
-import {
-	folderCrumbs,
-	folderTree,
-	formatLink,
-	joinFolder,
-	pure,
-	type FileEntry,
-	type UploadProgress,
-	type FolderEntry,
-	type SourceStatus,
-} from '@private-drive/domain';
+import { ClipboardFailure } from '@private-drive/model';
+import { folderCrumbs, folderTree, formatLink, joinFolder, pure } from '@private-drive/utils';
+import { isFileSort, type FileSort } from '@private-drive/utils';
 import * as Effect from 'effect/Effect';
 import { Subject, combineLatest, map, of, startWith, switchMap } from 'rxjs';
 
@@ -19,7 +13,6 @@ import { FilePane, fileDragType } from '../../../components/file-pane/file-pane'
 import { type FileRowAction } from '../../../components/file-table/file-table';
 import { type FolderActionId } from '../../../components/folder-actions/folder-actions';
 import { FolderTree } from '../../../components/folder-tree/folder-tree';
-import { ClipboardFailure } from '../../../core/drive-error';
 import { DriveApi } from '../../../services/drive-api/drive-api.service';
 import { DriveRuntime } from '../../../services/drive-runtime/drive-runtime.service';
 import { Notices } from '../../../services/notices/notices.service';
@@ -28,7 +21,6 @@ import { ConfirmDelete } from '../../confirm-delete';
 import { FolderPrompt } from '../../folder-prompt/folder-prompt/folder-prompt';
 import { MoveDialog } from '../../move-dialog/move-dialog';
 import { PreviewDialog } from '../../preview/preview-dialog/preview-dialog';
-import { isFileSort, type FileSort } from '../file-sort';
 import { emptyBrowse, watchFolderListing } from '../folder-browse';
 import { uploadChunked } from '../upload-chunks';
 

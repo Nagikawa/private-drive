@@ -1,5 +1,6 @@
+import type { FolderCrumb } from '@private-drive/utils';
+
 import { Component, input, output } from '@angular/core';
-import { FolderCrumb } from '@private-drive/domain';
 
 @Component({
 	selector: 'app-breadcrumbs',

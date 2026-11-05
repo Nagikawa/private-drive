@@ -1,9 +1,9 @@
 import { Component, inject, signal } from '@angular/core';
 import { form, FormField, required, submit } from '@angular/forms/signals';
 import { Router } from '@angular/router';
+import { SessionFailure } from '@private-drive/model';
 import * as Effect from 'effect/Effect';
 
-import { SessionFailure } from '../../../core/drive-error';
 import { DriveApi } from '../../../services/drive-api/drive-api.service';
 import { DriveRuntime } from '../../../services/drive-runtime/drive-runtime.service';
 

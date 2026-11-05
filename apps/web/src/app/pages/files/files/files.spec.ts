@@ -1,12 +1,12 @@
 import { TestBed } from '@angular/core/testing';
-import { Listing, SourceStatus } from '@private-drive/domain';
+import { Listing, SourceStatus } from '@private-drive/model';
 import * as Effect from 'effect/Effect';
 import { of } from 'rxjs';
 
+import { driveProviders } from '../../../../testing/runtime';
 import { DriveApi } from '../../../services/drive-api/drive-api.service';
 import { DriveRuntime } from '../../../services/drive-runtime/drive-runtime.service';
 import { Workspace } from '../../../services/workspace/workspace.service';
-import { driveProviders } from '../../../../testing/runtime';
 import { Files } from './files';
 
 const chat = 'https://t.me/c/1234567890';

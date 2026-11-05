@@ -1,11 +1,8 @@
-import type { SourceId } from '@private-drive/domain';
-
 import { Service, effect, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
+import { PreferenceFailure, type SourceId } from '@private-drive/model';
 import * as Effect from 'effect/Effect';
 import * as Exit from 'effect/Exit';
-
-import { PreferenceFailure } from '../../core/drive-error';
 
 const sourceKey = 'private-drive.source';
 const themeKey = 'private-drive.theme';

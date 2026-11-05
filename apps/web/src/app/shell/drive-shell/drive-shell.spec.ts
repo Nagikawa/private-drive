@@ -13,8 +13,6 @@ describe('DriveShell', () => {
 		const fixture = TestBed.createComponent(DriveShell);
 		fixture.detectChanges();
 		expect(fixture.nativeElement.textContent).toContain('Private Drive');
-		expect(
-			fixture.nativeElement.querySelector('button[aria-label="Log out"]'),
-		).not.toBeNull();
+		expect(fixture.nativeElement.querySelector('button[aria-label="Log out"]')).not.toBeNull();
 	});
 });

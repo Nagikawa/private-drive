@@ -1,4 +1,5 @@
-import { StorageError, splitStorageKey } from '@private-drive/domain';
+import { StorageError } from '@private-drive/model';
+import { splitStorageKey, unavailable } from '@private-drive/utils';
 import * as Context from 'effect/Context';
 import * as Effect from 'effect/Effect';
 import * as HttpClient from 'effect/http/HttpClient';
@@ -11,7 +12,6 @@ import * as Stream from 'effect/Stream';
 import { openAsBlob } from 'node:fs';
 
 import { AppConfig } from '../config.ts';
-import { unavailable } from './shared.ts';
 
 export interface TelegramStored {
 	readonly messageId: number | undefined;

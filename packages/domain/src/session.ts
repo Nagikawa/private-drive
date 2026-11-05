@@ -1,7 +1,12 @@
+import { Account, Unauthorized } from '@private-drive/model';
+import * as Context from 'effect/Context';
 import * as HttpApiMiddleware from 'effect/http-api/HttpApiMiddleware';
 import * as HttpApiSecurity from 'effect/http-api/HttpApiSecurity';
 
-import { CurrentAccount, Unauthorized } from './model.ts';
+// The account a valid session cookie provides to a protected route.
+export class CurrentAccount extends Context.Service<CurrentAccount, Account>()(
+	'private-drive/CurrentAccount',
+) {}
 
 export const SessionCookie = HttpApiSecurity.apiKey({
 	in: 'cookie',

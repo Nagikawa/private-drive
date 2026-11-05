@@ -1,9 +1,8 @@
+import { keepName, labels, limits } from '@private-drive/model';
 import * as Effect from 'effect/Effect';
 
 import type { FileStore } from './file-store.ts';
 import type { HuggingFace } from './huggingface.ts';
-
-import { keepName, labels, limits } from './shared.ts';
 
 // Adapts the dataset client. A rename still downloads and uploads because the API has no copy.
 export const huggingfaceStore = (huggingface: HuggingFace['Service']): FileStore => ({
